@@ -97,17 +97,17 @@
 
 ## 6. Verificación final
 
-- [ ] 6.1 Prueba de punta a punta con `MC_WATCH_CONFIG_DIR=local/demo` y la app real:
+- [x] 6.1 Prueba de punta a punta con `MC_WATCH_CONFIG_DIR=local/demo` y la app real:
   - abrir `mc.hypixel.net` → hidden con versión, MOTD con colores e icono;
   - agregar `mecotronicos.aternos.me` → Offline en la lista y "servidor apagado" en el detalle;
   - abrir un servidor Bedrock → hidden con "Bedrock";
   - si hay acceso a un servidor pequeño con muestra o Query, ver los nombres.
-- [ ] 6.2 Con el Aternos **encendido**, capturar con `uv run python scripts/probe_once.py --query mecotronicos.aternos.me` y confirmar que el `protocol` es real (no `-1`), que la app lo muestra online y qué modo de participantes ofrece. Anotar el resultado en el design (sección Context).
-- [ ] 6.3 Renombrar y eliminar con la app real y verificar:
+- [x] 6.2 Con el Aternos **encendido**, capturar con `uv run python scripts/probe_once.py --query mecotronicos.aternos.me` y confirmar que el `protocol` es real (no `-1`), que la app lo muestra online y qué modo de participantes ofrece. Anotar el resultado en el design (sección Context).
+- [x] 6.3 Renombrar y eliminar con la app real y verificar:
   - que `config.toml` conserva los comentarios y el resto de las entradas;
   - que el icono de la bandeja se actualiza al eliminar;
   - que tras reiniciar se mantienen los cambios;
   - que con `config.toml` roto a mano, ambos muestran el error y el archivo no cambia.
-- [ ] 6.4 Verificar que con el detalle abierto el panel se oculta al perder el foco y, al reabrirlo, sigue en el mismo detalle; y que el detalle se actualiza solo al terminar un ciclo.
+- [x] 6.4 Verificar que con el detalle abierto el panel se oculta al perder el foco y, al reabrirlo, sigue en el mismo detalle; y que el detalle se actualiza solo al terminar un ciclo.
 - [x] 6.5 Actualizar `docs/roadmap.md` si la heurística de dormidos o el diseño de Query cambian algo de lo descrito para los changes 3 y 4.
 - [x] 6.6 Ejecutar `uv run python -m unittest`, `uv run ruff check`, `uv run ruff format --check` y `uv run pyright`, y verificar que pasan en limpio.
