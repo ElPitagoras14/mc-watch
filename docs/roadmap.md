@@ -37,8 +37,8 @@ Monitor de servidores de Minecraft en la bandeja de Windows, pensado para jugado
 - Filtro de muestras falsas: UUID nulo, códigos `§`, nombres que no cumplen `[A-Za-z0-9_]{3,16}`.
 - `full` cuando Query responde o cuando `len(sample) == online`. `partial` cuando la muestra es menor que online. `hidden` cuando no hay muestra o el servidor es Bedrock.
 - Renombrar inline (click en el nombre) y eliminar con confirmación.
-- Spike: render del MOTD a HTML (verificar qué ofrece `Motd` en mcstatus 14).
-- Servidores "dormidos" (Aternos y similares): su proxy responde al ping aunque el servidor esté apagado, con un MOTD o una versión tipo "Offline" y 0 jugadores, y hoy `mc-watch` los marca online. Con el MOTD y la versión ya leídos, decidir si esa respuesta cuenta como offline y reflejarlo en el estado. Primero capturar con `probe_once` qué devuelve un servidor de Aternos apagado y encendido.
+- MOTD: `Motd.to_html()` de mcstatus 14 no escapa el texto, así que Python envía segmentos (texto, color y estilos) y la UI los pinta con `textContent`.
+- Servidores "dormidos" (Aternos y similares): su proxy responde al ping aunque el servidor esté apagado, con un MOTD o una versión tipo "Offline" y 0 jugadores, y hoy `mc-watch` los marca online. Capturado con un Aternos apagado: `protocol = -1` y versión `"§c● Offline"`. Regla: `protocol == -1` y la versión contiene "offline" o "sleeping" → offline de inmediato, y el detalle explica que el servidor está apagado.
 - **Prueba:** un servidor pequeño muestra nombres, uno grande muestra "12 de N" y uno Bedrock muestra "no comparte". Renombrar y eliminar persisten.
 
 ## 4. `notifications`: enterarme sin abrir el panel
