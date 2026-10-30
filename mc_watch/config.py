@@ -10,7 +10,7 @@ from typing import Any, Literal, cast
 
 import tomlkit
 import tomlkit.exceptions
-from tomlkit.items import AoT, Table
+from tomlkit.items import AoT, Item, Table
 
 from mc_watch.models import Edition, ServerConfig
 
@@ -19,12 +19,25 @@ CONFIG_DIR_ENV = "MC_WATCH_CONFIG_DIR"
 CONFIG_FILE_NAME = "config.toml"
 DEFAULT_POLL_INTERVAL_SECS = 60
 MIN_POLL_INTERVAL_SECS = 30
+MAX_POLL_INTERVAL_SECS = 3600
+DEFAULT_MAX_VISIBLE_SERVERS = 8
+MIN_VISIBLE_SERVERS = 3
+MAX_VISIBLE_SERVERS = 20
 MAX_NAME_LENGTH = 40
 
 log = logging.getLogger(__name__)
 
 # Every read-modify-write of the file goes through this lock.
 _write_lock = threading.Lock()
+
+
+@dataclass(frozen=True)
+class Settings:
+    """What the settings dialog edits."""
+
+    notifications: bool = False
+    poll_interval_secs: int = DEFAULT_POLL_INTERVAL_SECS
+    max_visible_servers: int = DEFAULT_MAX_VISIBLE_SERVERS
 
 
 @dataclass(frozen=True)
@@ -35,6 +48,12 @@ class Config:
     # False when the file exists but could not be read or parsed: the app must not write it.
     writable: bool = True
     error: str | None = field(default=None, compare=False)
+    notifications: bool = False
+    max_visible_servers: int = DEFAULT_MAX_VISIBLE_SERVERS
+
+    @property
+    def settings(self) -> Settings:
+        return Settings(self.notifications, self.poll_interval_secs, self.max_visible_servers)
 
 
 class ConfigWriteError(Exception):
@@ -91,10 +110,18 @@ def load_config(directory: Path | None = None) -> Config:
     warnings: list[str] = []
     interval = _parse_interval(data.get("poll_interval_secs"), warnings)
     servers = _parse_servers(data.get("servers"), warnings)
+    notifications = _parse_notifications(data.get("notifications"), warnings)
+    visible = _parse_visible(data.get("max_visible_servers"), warnings)
     for warning in warnings:
         log.warning("%s", warning)
     log.info("Configuración cargada: %d servidor(es), intervalo %d s", len(servers), interval)
-    return Config(poll_interval_secs=interval, servers=servers, warnings=tuple(warnings))
+    return Config(
+        poll_interval_secs=interval,
+        servers=servers,
+        warnings=tuple(warnings),
+        notifications=notifications,
+        max_visible_servers=visible,
+    )
 
 
 def _parse_interval(value: Any, warnings: list[str]) -> int:
@@ -110,7 +137,35 @@ def _parse_interval(value: Any, warnings: list[str]) -> int:
             f"poll_interval_secs={value} es menor al mínimo; se usa {MIN_POLL_INTERVAL_SECS}"
         )
         return MIN_POLL_INTERVAL_SECS
+    if value > MAX_POLL_INTERVAL_SECS:
+        warnings.append(
+            f"poll_interval_secs={value} es mayor al máximo; se usa {MAX_POLL_INTERVAL_SECS}"
+        )
+        return MAX_POLL_INTERVAL_SECS
     return value
+
+
+def _parse_notifications(value: Any, warnings: list[str]) -> bool:
+    if value is None:
+        return False
+    if not isinstance(value, bool):
+        warnings.append("notifications debe ser true o false; se usa false")
+        return False
+    return value
+
+
+def _parse_visible(value: Any, warnings: list[str]) -> int:
+    if value is None:
+        return DEFAULT_MAX_VISIBLE_SERVERS
+    if isinstance(value, bool) or not isinstance(value, int):
+        warnings.append(
+            f"max_visible_servers debe ser un entero; se usa {DEFAULT_MAX_VISIBLE_SERVERS}"
+        )
+        return DEFAULT_MAX_VISIBLE_SERVERS
+    clamped = min(max(value, MIN_VISIBLE_SERVERS), MAX_VISIBLE_SERVERS)
+    if clamped != value:
+        warnings.append(f"max_visible_servers={value} está fuera de rango; se usa {clamped}")
+    return clamped
 
 
 def _parse_servers(value: Any, warnings: list[str]) -> tuple[ServerConfig, ...]:
@@ -206,6 +261,40 @@ def append_server(directory: Path | None, server: ServerConfig) -> None:
         return True
 
     _update(directory, edit)
+
+
+def save_settings(directory: Path | None, settings: Settings) -> bool:
+    """Write the three settings as top-level keys, before the `[[servers]]` entries. Returns
+    whether the file was written: it is not when it already had those values."""
+
+    def edit(document: tomlkit.TOMLDocument) -> bool:
+        values = {
+            "notifications": settings.notifications,
+            "poll_interval_secs": settings.poll_interval_secs,
+            "max_visible_servers": settings.max_visible_servers,
+        }
+        current = document.unwrap()
+        # With none of the keys there yet, tomlkit glues them to the first table. When one
+        # exists, whatever separated it from the servers is still there.
+        fresh = not any(key in current for key in values)
+        changed = False
+        for key, value in values.items():
+            # `True == 1`: compare the types too, or a hand-written `notifications = 1` stays.
+            old = current.get(key)
+            if type(old) is type(value) and old == value:
+                continue
+            added = key not in current
+            document[key] = value
+            changed = True
+            if added and fresh and "servers" in current:
+                # Leave a blank line between the last new key and the first table.
+                cast("Item", document.item(key)).trivia.trail = "\n\n"
+                for previous in values:
+                    if previous != key and previous in document:
+                        cast("Item", document.item(previous)).trivia.trail = "\n"
+        return changed
+
+    return _update(directory, edit)
 
 
 def _find_entry(document: tomlkit.TOMLDocument, address: str) -> tuple[int, Table] | None:

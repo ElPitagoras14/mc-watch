@@ -31,6 +31,8 @@ class PreviewTest(unittest.TestCase):
         self.assertEqual(by_label["Vacío"]["servers"], [])
         self.assertIsNone(by_label["Antes del 1er ciclo"]["updated_at"])
         self.assertGreater(len(by_label["Muchos (scroll)"]["servers"]), 8)
+        # The settings dialog opens with them.
+        self.assertTrue(all(item["payload"]["settings"]["max_visible_servers"] for item in data))
 
     def test_scenarios_cover_the_editions_and_the_broken_config(self) -> None:
         data = scenarios(NOW)

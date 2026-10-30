@@ -109,6 +109,9 @@ class _Api:
     def remove_server(self, address: str) -> Payload:
         return self._panel.remove_server(address)
 
+    def save_settings(self, values: Payload) -> Payload:
+        return self._panel.save_settings(values)
+
 
 class Panel:
     def __init__(
@@ -119,6 +122,7 @@ class Panel:
         rename_server: Callable[[str, str], Payload] | None = None,
         remove_server: Callable[[str], Payload] | None = None,
         refresh_server: Callable[[str], None] | None = None,
+        save_settings: Callable[[Payload], Payload] | None = None,
     ) -> None:
         self.get_payload = get_payload
         self._add_server = add_server
@@ -126,6 +130,7 @@ class Panel:
         self._rename_server = rename_server
         self._remove_server = remove_server
         self._refresh_server = refresh_server
+        self._save_settings = save_settings
         self._lock = threading.RLock()
         self._guard = ReopenGuard()
         self._pinned = False
@@ -254,6 +259,12 @@ class Panel:
             return {"ok": False, "field": None, "message": "No se puede eliminar"}
         return self._remove_server(address)
 
+    def save_settings(self, values: Payload) -> Payload:
+        """Called from the page; blocks until the settings are saved and applied."""
+        if self._save_settings is None:
+            return {"ok": False, "field": None, "message": "No se pueden guardar los ajustes"}
+        return self._save_settings(values)
+
     def refresh_server(self, address: str) -> None:
         """Called from the page; blocks until that server was polled."""
         if self._refresh_server is not None:
@@ -266,13 +277,22 @@ class Panel:
 
     def push(self, payload: Payload) -> None:
         """Send fresh data to the page. Safe to call from any thread."""
+        self._call_page("render", payload)
+
+    def open_server(self, address: str | None) -> None:
+        """Show the panel on that server's detail, or on the list when `address` is None or the
+        server is gone. Safe to call from any thread."""
+        self._call_page("openDetail", address)
+        self.show()
+
+    def _call_page(self, function: str, argument: Any) -> None:
         window = self._window
         if window is None or not self._loaded.is_set():
             return
         try:
-            window.evaluate_js(f"window.mcw && window.mcw.render({json.dumps(payload)})")
+            window.evaluate_js(f"window.mcw && window.mcw.{function}({json.dumps(argument)})")
         except Exception:
-            log.exception("No se pudo enviar el snapshot a la ventana")
+            log.exception("No se pudo llamar a mcw.%s en la ventana", function)
 
     def destroy(self) -> None:
         window = self._window

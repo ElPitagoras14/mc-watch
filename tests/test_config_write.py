@@ -7,10 +7,12 @@ from mc_watch.config import (
     MAX_NAME_LENGTH,
     Config,
     ConfigWriteError,
+    Settings,
     ValidationError,
     append_server,
     config_path,
     load_config,
+    save_settings,
     set_edition,
     validate_new_server,
 )
@@ -197,3 +199,35 @@ class WriteConfigTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SaveSettingsTest(unittest.TestCase):
+    def setUp(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.directory = Path(tmp.name)
+        self.path = config_path(self.directory)
+
+    def test_new_keys_go_above_the_servers(self) -> None:
+        servers = '[[servers]]\nname = "A"\naddress = "a.example.com"\n'
+        self.path.write_text(servers, encoding="utf-8")
+        self.assertTrue(save_settings(self.directory, Settings(True, 120, 5)))
+        self.assertEqual(
+            self.path.read_text(encoding="utf-8"),
+            "notifications = true\npoll_interval_secs = 120\nmax_visible_servers = 5\n\n" + servers,
+        )
+        config = load_config(self.directory)
+        self.assertEqual(config.settings, Settings(True, 120, 5))
+        self.assertEqual(len(config.servers), 1)
+
+    def test_existing_keys_are_updated_in_place(self) -> None:
+        self.path.write_text(
+            "# intervalo\npoll_interval_secs = 60  # segundos\nnotifications = false\n\n"
+            '[[servers]]\nname = "A"\naddress = "a.example.com"\n',
+            encoding="utf-8",
+        )
+        save_settings(self.directory, Settings(True, 90, 8))
+        text = self.path.read_text(encoding="utf-8")
+        self.assertIn("# intervalo\npoll_interval_secs = 90  # segundos\n", text)
+        self.assertIn("notifications = true\nmax_visible_servers = 8\n\n[[servers]]", text)
+        self.assertFalse(save_settings(self.directory, Settings(True, 90, 8)))

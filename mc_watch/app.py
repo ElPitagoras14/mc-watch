@@ -10,8 +10,10 @@ from mc_watch import __version__
 from mc_watch.config import Config, config_dir, config_path, load_config
 from mc_watch.log import setup_logging
 from mc_watch.models import Snapshot
+from mc_watch.notify import Notifications
 from mc_watch.poller import Poller
 from mc_watch.servers import ServerManager
+from mc_watch.settings import SettingsManager
 from mc_watch.tray import Tray
 from mc_watch.view import snapshot_payload
 from mc_watch.window import Panel, Payload
@@ -29,6 +31,14 @@ class App:
         self._config_path = str(config_path(self.directory))
         self.poller = Poller(self.config.servers, self.config.poll_interval_secs)
         self.servers = ServerManager(self.directory, self.config, self.poller)
+        self.notifications = Notifications(self.config.notifications, self._open_server)
+        self.settings = SettingsManager(
+            self.directory,
+            self.config,
+            self.poller,
+            self.notifications,
+            on_change=lambda: self.panel.push(self._payload(self.poller.snapshot())),
+        )
         self.panel = Panel(
             lambda: self._payload(self.poller.snapshot()),
             add_server=self.servers.add_server,
@@ -36,6 +46,7 @@ class App:
             rename_server=self.servers.rename_server,
             remove_server=self.servers.remove_server,
             refresh_server=self.poller.refresh_server,
+            save_settings=self.settings.save,
         )
         self.tray = Tray(
             on_toggle=self.panel.toggle,
@@ -44,6 +55,7 @@ class App:
         )
         self.poller.subscribe(self.servers.on_snapshot)
         self.poller.subscribe(self._on_snapshot)
+        self.poller.subscribe(self.notifications.on_snapshot)
         self._quit_lock = threading.Lock()
         self._quitting = False
 
@@ -53,7 +65,12 @@ class App:
             config_path=self._config_path,
             version=__version__,
             config_error=self.config.error,
+            settings=self.settings.current,
         )
+
+    def _open_server(self, address: str | None) -> None:
+        """Click on a notification. Runs on the notifications thread."""
+        self.panel.open_server(address)
 
     def _on_snapshot(self, snapshot: Snapshot) -> None:
         self.tray.update(snapshot)

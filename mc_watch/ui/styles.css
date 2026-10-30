@@ -648,3 +648,140 @@ body.kbd .hd h1.editable:focus-visible {
 #detail .sec {
   margin-top: 14px;
 }
+
+/* Settings dialog: covers the whole panel; the rest is inert underneath. */
+.panel {
+  position: relative;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.dialog {
+  padding: 14px 16px 12px;
+  background: var(--bg);
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.dialog h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--sep);
+}
+
+.setting:first-of-type {
+  border-top: 0;
+}
+
+.setting .text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.setting .hint {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.setting input[type="number"] {
+  flex: none;
+  width: 72px;
+  padding: 5px 8px;
+  color: var(--text);
+  font: inherit;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  background: var(--hover);
+  border: 1px solid var(--sep);
+  border-radius: 4px;
+  outline: none;
+  user-select: text;
+}
+
+.setting input[type="number"]:focus {
+  border-color: var(--accent);
+}
+
+.setting input[aria-invalid="true"] {
+  border-color: var(--red);
+}
+
+/* A switch drawn over the native checkbox, so it keeps its keyboard and screen-reader role. */
+.setting input[type="checkbox"] {
+  flex: none;
+  position: relative;
+  width: 34px;
+  height: 18px;
+  margin: 0;
+  appearance: none;
+  background: var(--btn-on);
+  border: 1px solid #555;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.setting input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: var(--muted);
+  border-radius: 50%;
+  transition: transform 0.15s, background 0.15s;
+}
+
+.setting input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.setting input[type="checkbox"]:checked::after {
+  background: #fff;
+  transform: translateX(16px);
+}
+
+.setting input:focus {
+  outline: none;
+}
+
+body.kbd .setting input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setting input[type="checkbox"],
+  .setting input[type="checkbox"]::after {
+    transition: none;
+  }
+}
+
+.dialog > .err {
+  margin: -4px 0 6px;
+  text-align: right;
+}
+
+.dialog .buttons {
+  margin-top: 10px;
+}

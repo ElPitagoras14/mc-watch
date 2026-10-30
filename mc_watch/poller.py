@@ -74,6 +74,7 @@ class Poller:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._stop_event: asyncio.Event | None = None
         self._refresh_event: asyncio.Event | None = None
+        self._reschedule_event: asyncio.Event | None = None
         self._cycling = False
         self._ready = threading.Event()
 
@@ -247,6 +248,7 @@ class Poller:
         self._loop = asyncio.get_running_loop()
         self._stop_event = stop_event = asyncio.Event()
         self._refresh_event = refresh_event = asyncio.Event()
+        self._reschedule_event = reschedule_event = asyncio.Event()
         self._ready.set()
 
         while not stop_event.is_set():
@@ -256,24 +258,43 @@ class Poller:
                 await self._cycle()
             finally:
                 self._cycling = False
-            remaining = self._interval_secs - (time.monotonic() - started)
-            await self._wait_for_next_cycle(stop_event, refresh_event, max(remaining, 0))
+            # A new interval wakes the wait up to count it again from this cycle's start.
+            while not stop_event.is_set():
+                remaining = self._interval_secs - (time.monotonic() - started)
+                woken_by = await self._wait_for_next_cycle(
+                    [stop_event, refresh_event, reschedule_event], max(remaining, 0)
+                )
+                if woken_by is not reschedule_event:
+                    break
 
     @staticmethod
     async def _wait_for_next_cycle(
-        stop_event: asyncio.Event, refresh_event: asyncio.Event, timeout: float
-    ) -> None:
-        """Sleep until the interval elapses, a refresh is requested or the poller stops."""
-        waiters = [
-            asyncio.ensure_future(stop_event.wait()),
-            asyncio.ensure_future(refresh_event.wait()),
-        ]
+        events: list[asyncio.Event], timeout: float
+    ) -> asyncio.Event | None:
+        """Sleep until `timeout` elapses or one of `events` is set. Returns that event, cleared
+        (None on timeout)."""
+        waiters = {asyncio.ensure_future(event.wait()): event for event in events}
         try:
-            await asyncio.wait(waiters, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
+            done, _ = await asyncio.wait(
+                waiters, timeout=timeout, return_when=asyncio.FIRST_COMPLETED
+            )
         finally:
             for waiter in waiters:
                 waiter.cancel()
-        refresh_event.clear()
+        woken_by = next((waiters[waiter] for waiter in done), None)
+        for event in events[1:]:  # the stop event stays set
+            event.clear()
+        return woken_by
+
+    def set_interval(self, interval_secs: float) -> None:
+        """Change the interval. The next cycle is scheduled again from the start of the last
+        one. Safe to call from any thread, also when the poller is not running."""
+        self._interval_secs = interval_secs
+        loop, event = self._running_loop(), self._reschedule_event
+        if loop is None or event is None:
+            return
+        with contextlib.suppress(RuntimeError):
+            loop.call_soon_threadsafe(event.set)
 
     async def _cycle(self) -> None:
         started = time.monotonic()

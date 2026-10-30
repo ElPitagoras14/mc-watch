@@ -54,9 +54,28 @@
     confirmErr: $('confirm-err'),
     confirmCancel: $('confirm-cancel'),
     confirmOk: $('confirm-ok'),
+    settingsBtn: $('btn-settings'),
+    settings: $('settings'),
+    settingsForm: $('settings-form'),
+    sNotice: $('s-notice'),
+    sNoticePath: $('s-notice-path'),
+    sNotifications: $('s-notifications'),
+    sInterval: $('s-interval'),
+    sVisible: $('s-visible'),
+    errInterval: $('err-interval'),
+    errVisible: $('err-visible'),
+    settingsMsg: $('settings-msg'),
+    sCancel: $('s-cancel'),
+    sSave: $('s-save'),
   };
 
   const REFRESH_TIMEOUT_MS = 15000;
+  const DEFAULT_SETTINGS = { notifications: false, poll_interval_secs: 60, max_visible_servers: 8 };
+  // The same limits and messages as Python's settings.py, for the preview.
+  const LIMITS = {
+    poll_interval_secs: [30, 3600],
+    max_visible_servers: [3, 20],
+  };
 
   const state = {
     updatedAt: null,
@@ -73,6 +92,8 @@
     confirming: false, // the delete confirmation is open
     deleting: false, // the delete call is in flight
     payload: null, // last payload rendered
+    settingsOpen: false, // the settings dialog is open, over the list
+    saving: false, // the save-settings call is in flight
   };
 
   // Python side (pywebview). Absent when the page runs in a plain browser (preview).
@@ -148,17 +169,48 @@
     let total = px(own.paddingTop) + px(own.paddingBottom)
       + px(own.borderTopWidth) + px(own.borderBottomWidth);
     for (const child of el.app.children) {
-      if (child.hidden) continue;
+      if (child.hidden || child === el.settings) continue;
       const style = getComputedStyle(child);
-      const scrolls = child === el.list || child === el.detail;
-      const height = scrolls ? child.scrollHeight : child.offsetHeight;
+      let height = child.offsetHeight;
+      if (child === el.detail) height = child.scrollHeight;
+      if (child === el.list) height = Math.min(child.scrollHeight, listCap() ?? Infinity);
       total += height + px(style.marginTop) + px(style.marginBottom);
     }
-    return Math.ceil(total);
+    return Math.ceil(Math.max(total, dialogHeight()));
+  }
+
+  // Room the settings dialog needs, or 0 when it is closed. The dialog covers the panel, so the
+  // panel grows when the dialog would not fit.
+  function dialogHeight() {
+    if (!state.settingsOpen) return 0;
+    const overlay = getComputedStyle(el.settings);
+    return el.settingsForm.offsetHeight
+      + parseFloat(overlay.paddingTop) + parseFloat(overlay.paddingBottom);
+  }
+
+  const settings = () => (state.payload && state.payload.settings) || DEFAULT_SETTINGS;
+
+  // Height of the first `max_visible_servers` rows, or null when every row fits.
+  function listCap() {
+    const rows = el.servers.children;
+    const visible = settings().max_visible_servers;
+    if (rows.length <= visible) return null;
+    const last = rows[visible - 1];
+    const bottom = last.getBoundingClientRect().bottom + parseFloat(getComputedStyle(last).marginBottom);
+    return Math.ceil(bottom - el.list.getBoundingClientRect().top + el.list.scrollTop);
+  }
+
+  function applyListCap() {
+    el.list.style.maxHeight = '';
+    const cap = listCap();
+    if (cap !== null) el.list.style.maxHeight = `${cap}px`;
   }
 
   // The window height follows the content: Python clamps it to its min/max.
   function reportHeight() {
+    // The overlay fills the panel, so the panel itself must be as tall as the dialog.
+    const room = dialogHeight();
+    el.app.style.minHeight = room ? `${Math.ceil(room)}px` : '';
     const natural = naturalHeight();
     if (natural === state.lastHeight) return;
     state.lastHeight = natural;
@@ -191,12 +243,16 @@
     el.servers.replaceChildren(...payload.servers.map(buildRow));
     el.empty.hidden = payload.servers.length > 0;
     renderEmpty(payload);
+    if (state.view === 'list') applyListCap();
 
     // The form keeps what the user typed; only its config notice follows the payload.
     const broken = Boolean(payload.config_error);
     el.notice.hidden = !broken;
     el.noticePath.textContent = payload.config_path;
     el.submit.disabled = broken || state.busy;
+    el.sNotice.hidden = !broken;
+    el.sNoticePath.textContent = payload.config_path;
+    el.sSave.disabled = broken || state.saving;
 
     if (state.view === 'detail') {
       const server = currentServer();
@@ -298,6 +354,7 @@
     el.refresh.title = detail ? 'Actualizar este servidor' : 'Actualizar ahora';
     el.refresh.setAttribute('aria-label', el.refresh.title);
     el.add.hidden = !list;
+    el.settingsBtn.hidden = !list;
     el.del.hidden = !detail;
     el.sectionTitle.hidden = !list;
     el.list.hidden = !list;
@@ -314,6 +371,7 @@
       el.title.textContent = form ? 'Agregar servidor' : 'MC Watch';
     }
     if (form) el.address.focus();
+    if (list) applyListCap();
     scheduleHeight();
   }
 
@@ -697,11 +755,131 @@
     return { ok: true };
   }
 
+  // --- Settings dialog -----------------------------------------------------
+
+  const settingsFields = () => ({
+    poll_interval_secs: [el.errInterval, el.sInterval],
+    max_visible_servers: [el.errVisible, el.sVisible],
+  });
+
+  function clearSettingsErrors() {
+    for (const [node, input] of [...Object.values(settingsFields()), [el.settingsMsg, null]]) {
+      node.hidden = true;
+      node.textContent = '';
+      if (input) input.removeAttribute('aria-invalid');
+    }
+  }
+
+  // Everything but the dialog stops taking clicks and focus while it is open.
+  function setInert(on) {
+    for (const child of el.app.children) {
+      if (child !== el.settings) child.inert = on;
+    }
+  }
+
+  function openSettings() {
+    if (state.settingsOpen || state.view !== 'list') return;
+    const current = settings();
+    el.sNotifications.checked = current.notifications;
+    el.sInterval.value = String(current.poll_interval_secs);
+    el.sVisible.value = String(current.max_visible_servers);
+    clearSettingsErrors();
+    state.settingsOpen = true;
+    el.settings.hidden = false;
+    setInert(true);
+    scheduleHeight();
+    el.sNotifications.focus();
+  }
+
+  function closeSettings() {
+    if (!state.settingsOpen || state.saving) return;
+    state.settingsOpen = false;
+    el.settings.hidden = true;
+    setInert(false);
+    scheduleHeight();
+  }
+
+  function setSaving(on) {
+    state.saving = on;
+    for (const input of [el.sNotifications, el.sInterval, el.sVisible, el.sCancel]) {
+      input.disabled = on;
+    }
+    el.sSave.disabled = on || Boolean(state.payload && state.payload.config_error);
+    el.sSave.textContent = on ? 'Guardando…' : 'Guardar';
+  }
+
+  function showSettingsError(reply) {
+    const [node, input] = settingsFields()[reply.field] || [el.settingsMsg, null];
+    node.textContent = reply.message;
+    node.hidden = false;
+    if (input) {
+      input.setAttribute('aria-invalid', 'true');
+      input.focus();
+    }
+    scheduleHeight();
+  }
+
+  // An empty field travels as null so Python reports it on the right field.
+  const numberOrNull = (input) => (input.value.trim() === '' ? null : Number(input.value));
+
+  async function submitSettings(event) {
+    event.preventDefault();
+    if (state.saving || el.sSave.disabled) return;
+    clearSettingsErrors();
+    const values = {
+      notifications: el.sNotifications.checked,
+      poll_interval_secs: numberOrNull(el.sInterval),
+      max_visible_servers: numberOrNull(el.sVisible),
+    };
+    setSaving(true);
+    let reply;
+    try {
+      reply = await saveSettings(values);
+    } catch (error) {
+      reply = { ok: false, field: null, message: 'No se pudieron guardar los ajustes' };
+    }
+    setSaving(false);
+    if (reply.ok) closeSettings();
+    else showSettingsError(reply);
+  }
+
+  async function saveSettings(values) {
+    const api = bridge();
+    if (api) return api.save_settings(values);
+    if (window.__MCW_PREVIEW__) return previewSaveSettings(values);
+    throw new Error('sin conexión con la app');
+  }
+
+  // Preview only: validates like Python and applies the values without saving anything.
+  async function previewSaveSettings(values) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    for (const [field, [low, high]] of Object.entries(LIMITS)) {
+      const value = values[field];
+      if (!Number.isInteger(value) || value < low || value > high) {
+        return { ok: false, field, message: `Entre ${low} y ${high}` };
+      }
+    }
+    render({ ...state.payload, settings: values });
+    return { ok: true };
+  }
+
+  // Click on a notification: that server's detail, or the list when it is gone. Whatever was
+  // half done (form, dialog, rename, confirmation) is dropped.
+  function showServer(address) {
+    if (state.saving || state.busy || state.deleting) return;
+    if (state.settingsOpen) closeSettings();
+    if (state.view === 'form') closeForm();
+    if (state.view === 'detail') leaveDetail();
+    const exists = state.payload && state.payload.servers.some((s) => s.address === address);
+    if (address && exists) openDetail(address);
+  }
+
   // --- Escape --------------------------------------------------------------
 
   // One level at a time: rename, confirmation, form or detail, and only then the panel.
   function onEscape() {
-    if (state.renaming) endRename();
+    if (state.settingsOpen) closeSettings();
+    else if (state.renaming) endRename();
     else if (state.confirming) closeConfirm();
     else if (state.view === 'form' && !state.busy) closeForm();
     else if (state.view === 'detail') leaveDetail();
@@ -770,6 +948,9 @@
   el.del.addEventListener('click', openConfirm);
   el.confirmCancel.addEventListener('click', closeConfirm);
   el.confirmOk.addEventListener('click', confirmDelete);
+  el.settingsBtn.addEventListener('click', openSettings);
+  el.sCancel.addEventListener('click', closeSettings);
+  el.settingsForm.addEventListener('submit', submitSettings);
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') onEscape();
     if (event.key === 'Tab') document.body.classList.add('kbd');
@@ -780,7 +961,7 @@
     if (api) api.on_blur();
   });
 
-  window.mcw = { render };
+  window.mcw = { render, openDetail: showServer };
   setInterval(updateFooter, 1000);
 
   if (window.__MCW_PREVIEW__) {
