@@ -2,13 +2,19 @@ import unittest
 
 from mc_watch.models import (
     Edition,
+    MotdSegment,
+    PlayersMode,
+    ProbeAsleep,
     ProbeOk,
     ProbeUnreachable,
     ProbeUnresolvable,
+    QueryOutcome,
+    SamplePlayer,
     ServerConfig,
+    ServerInfo,
     State,
 )
-from mc_watch.state import initial_status, next_status
+from mc_watch.state import QUERY_RETRY_CYCLES, initial_status, next_status, wants_query
 
 SERVER = ServerConfig(name="Survival", address="play.example.com")
 OK = ProbeOk(online=3, max=20, latency_ms=42.0)
@@ -113,6 +119,95 @@ class NextStatusTest(unittest.TestCase):
         bedrock = ProbeOk(online=1, max=10, latency_ms=30.0, edition=Edition.BEDROCK)
         status = next_status(initial_status(java), bedrock)
         self.assertEqual(status.server.edition, Edition.JAVA)
+
+
+JAVA = ServerConfig("Survival", "play.example.com", Edition.JAVA)
+INFO = ServerInfo(motd=(MotdSegment("Hola", color="#55ff55"),), version="1.21.4")
+RICH = ProbeOk(
+    online=2,
+    max=20,
+    latency_ms=45.0,
+    info=INFO,
+    sample=(SamplePlayer("Steve", "1"), SamplePlayer("Alex", "2")),
+)
+ASLEEP = ProbeAsleep()
+
+
+class DetailTest(unittest.TestCase):
+    def test_online_exposes_info_latency_and_players(self) -> None:
+        status = next_status(initial_status(JAVA), RICH)
+        self.assertEqual(status.info, INFO)
+        self.assertEqual(status.latency_ms, 45.0)
+        self.assertEqual(status.players_mode, PlayersMode.FULL)
+        self.assertEqual(status.players, ("Steve", "Alex"))
+        self.assertFalse(status.asleep)
+
+    def test_offline_drops_the_detail(self) -> None:
+        online = next_status(initial_status(JAVA), RICH)
+        status = next_status(next_status(online, FAIL), FAIL)
+        self.assertIsNone(status.info)
+        self.assertIsNone(status.latency_ms)
+        self.assertIsNone(status.players_mode)
+        self.assertEqual(status.players, ())
+
+
+class AsleepTest(unittest.TestCase):
+    def test_online_to_asleep_is_offline_in_one_cycle(self) -> None:
+        online = next_status(initial_status(JAVA), RICH)
+        status = next_status(online, ASLEEP)
+        self.assertEqual(status.state, State.OFFLINE)
+        self.assertTrue(status.asleep)
+        self.assertIsNone(status.online)
+        self.assertIsNone(status.info)
+        self.assertEqual(status.failures, 0)
+
+    def test_unknown_edition_asleep_is_pinned_to_java(self) -> None:
+        status = next_status(initial_status(SERVER), ASLEEP)
+        self.assertEqual(status.server.edition, Edition.JAVA)
+        self.assertEqual(status.state, State.OFFLINE)
+
+    def test_one_failure_keeps_it_asleep_and_two_clear_the_flag(self) -> None:
+        asleep = next_status(next_status(initial_status(JAVA), RICH), ASLEEP)
+        first = next_status(asleep, FAIL)
+        self.assertEqual(first.state, State.OFFLINE)
+        self.assertTrue(first.asleep, "un fallo aislado no demuestra que despertó")
+        second = next_status(first, FAIL)
+        self.assertEqual(second.state, State.OFFLINE)
+        self.assertFalse(second.asleep)
+
+
+def with_query(outcome: QueryOutcome) -> ProbeOk:
+    return ProbeOk(online=2, max=20, latency_ms=45.0, query=outcome)
+
+
+class QueryTest(unittest.TestCase):
+    def test_java_asks_for_query_until_told_otherwise(self) -> None:
+        self.assertTrue(wants_query(initial_status(JAVA)))
+
+    def test_bedrock_never_asks_for_query(self) -> None:
+        bedrock = ServerConfig("B", "bedrock.example.com", Edition.BEDROCK)
+        status = next_status(initial_status(bedrock), ProbeOk(1, 10, 30.0, Edition.BEDROCK))
+        self.assertFalse(wants_query(status))
+
+    def test_query_ok_marks_it_capable_and_keeps_asking(self) -> None:
+        status = next_status(initial_status(JAVA), with_query(QueryOutcome.OK))
+        self.assertIs(status.query_capable, True)
+        self.assertTrue(wants_query(status))
+
+    def test_query_failure_pauses_it_and_retries_on_the_tenth_online_cycle(self) -> None:
+        status = next_status(initial_status(JAVA), with_query(QueryOutcome.FAILED))
+        self.assertIs(status.query_capable, False)
+        for cycle in range(1, QUERY_RETRY_CYCLES):
+            self.assertFalse(wants_query(status), f"ciclo {cycle}")
+            status = next_status(status, with_query(QueryOutcome.SKIPPED))
+        self.assertTrue(wants_query(status), "el décimo ciclo online reintenta")
+
+    def test_offline_cycles_do_not_count_towards_the_retry(self) -> None:
+        status = next_status(initial_status(JAVA), with_query(QueryOutcome.FAILED))
+        for _ in range(5):
+            status = next_status(status, FAIL)
+        self.assertEqual(status.query_wait, QUERY_RETRY_CYCLES - 1)
+        self.assertFalse(wants_query(status))
 
 
 if __name__ == "__main__":

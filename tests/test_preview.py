@@ -43,6 +43,16 @@ class PreviewTest(unittest.TestCase):
         self.assertIsNotNone(broken["config_error"])
         self.assertIsNone(by_label["Vacío"]["config_error"])
 
+    def test_detail_scenario_covers_every_players_mode_and_the_asleep_server(self) -> None:
+        servers = {item["label"]: item["payload"]["servers"] for item in scenarios(NOW)}["Detalle"]
+
+        self.assertEqual(
+            {s["players_mode"] for s in servers if s["state"] == "online"},
+            {"full", "partial", "hidden"},
+        )
+        self.assertTrue(any(s["asleep"] for s in servers))
+        self.assertTrue(any(not s["players"] and s["players_mode"] == "full" for s in servers))
+
     def test_builds_a_self_contained_page(self) -> None:
         index = build_preview(self.directory, now=NOW)
 
@@ -51,7 +61,7 @@ class PreviewTest(unittest.TestCase):
             self.assertTrue((self.directory / name).exists(), name)
         html = index.read_text(encoding="utf-8")
         self.assertLess(html.index("__MCW_PREVIEW__"), html.index('src="app.js"'))
-        self.assertEqual(len(extract_data(html)), 5)
+        self.assertEqual(len(extract_data(html)), 6)
 
     def test_does_not_modify_the_real_ui(self) -> None:
         from mc_watch.preview import UI_DIR

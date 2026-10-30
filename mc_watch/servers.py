@@ -11,7 +11,10 @@ from mc_watch.config import (
     ConfigWriteError,
     ValidationError,
     append_server,
+    normalize_name,
+    remove_server,
     set_edition,
+    set_name,
     validate_new_server,
 )
 from mc_watch.models import Edition, ProbeOk, ProbeResult, ProbeUnresolvable, Snapshot
@@ -41,7 +44,7 @@ class ServerManager:
         self._config = config
         self._poller = poller
         self._probe_fn = probe_fn
-        self._add_lock = threading.Lock()
+        self._lock = threading.Lock()
         # Last edition known for each address, to spot servers that were just detected.
         self._editions = {s.address.casefold(): s.edition for s in config.servers}
 
@@ -49,7 +52,7 @@ class ServerManager:
         """Validate, detect the edition, save and start tracking. Blocks for up to a few
         seconds; the page awaits it. Never raises."""
         try:
-            with self._add_lock:
+            with self._lock:
                 return self._add(name, address)
         except Exception:
             log.exception("Error inesperado al agregar %r", address)
@@ -89,6 +92,51 @@ class ServerManager:
         self._editions[server.address.casefold()] = edition
         self._poller.add(server, result)
         log.info("Servidor agregado: %s (%s), %s", server.name, server.address, edition.value)
+        return {"ok": True}
+
+    def rename_server(self, address: str, name: str) -> Reply:
+        """Save the new name and show it right away. Never raises."""
+        try:
+            with self._lock:
+                return self._rename(address, name)
+        except Exception:
+            log.exception("Error inesperado al renombrar %r", address)
+            return _error("No se pudo renombrar el servidor", "name")
+
+    def _rename(self, address: str, name: str) -> Reply:
+        if not self._config.writable:
+            return _error(self._config.error or "No se puede escribir la configuración", "name")
+        normalized = normalize_name(name, address)
+        if isinstance(normalized, ValidationError):
+            return _error(normalized.message, "name")
+        try:
+            set_name(self._directory, address, normalized)
+        except ConfigWriteError as error:
+            log.warning("No se pudo renombrar %s: %s", address, error)
+            return _error(str(error), "name")
+        self._poller.rename(address, normalized)
+        return {"ok": True, "name": normalized}
+
+    def remove_server(self, address: str) -> Reply:
+        """Delete the server from the file and stop tracking it. Never raises."""
+        try:
+            with self._lock:
+                return self._remove(address)
+        except Exception:
+            log.exception("Error inesperado al eliminar %r", address)
+            return _error("No se pudo eliminar el servidor")
+
+    def _remove(self, address: str) -> Reply:
+        if not self._config.writable:
+            return _error(self._config.error or "No se puede escribir la configuración")
+        try:
+            # False when the entry is gone from the file already: it is gone either way.
+            remove_server(self._directory, address)
+        except ConfigWriteError as error:
+            log.warning("No se pudo eliminar %s: %s", address, error)
+            return _error(str(error))
+        self._editions.pop(address.casefold(), None)
+        self._poller.remove(address)
         return {"ok": True}
 
     def on_snapshot(self, snapshot: Snapshot) -> None:

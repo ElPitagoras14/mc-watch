@@ -7,14 +7,17 @@ from typing import Any
 from unittest import mock
 
 import dns.exception
+from mcstatus.motd import Motd
 
 from mc_watch import probe as probe_module
 from mc_watch.models import (
     Edition,
+    MotdSegment,
     ProbeOk,
     ProbeUnreachable,
     ProbeUnresolvable,
     ServerConfig,
+    ServerInfo,
 )
 
 SERVER = ServerConfig(name="Survival", address="play.example.com", edition=Edition.JAVA)
@@ -28,8 +31,28 @@ def fake_java(status: Any) -> mock.MagicMock:
     return java
 
 
-def response(online: int = 7, max_players: int = 20, latency: float = 12.5) -> SimpleNamespace:
-    return SimpleNamespace(players=SimpleNamespace(online=online, max=max_players), latency=latency)
+INFO = ServerInfo(motd=(MotdSegment("Hola"),), version="1.21.4")
+
+
+def response(
+    online: int = 7,
+    max_players: int = 20,
+    latency: float = 12.5,
+    *,
+    protocol: int = 767,
+    version: str = "1.21.4",
+    motd: Any = "Hola",
+    icon: str | None = None,
+    sample: list[Any] | None = None,
+    bedrock: bool = False,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        players=SimpleNamespace(online=online, max=max_players, sample=sample),
+        version=SimpleNamespace(name=version, protocol=protocol),
+        motd=Motd.parse(motd, bedrock=bedrock),
+        icon=icon,
+        latency=latency,
+    )
 
 
 class ProbeTest(unittest.IsolatedAsyncioTestCase):
@@ -45,7 +68,7 @@ class ProbeTest(unittest.IsolatedAsyncioTestCase):
 
         result = await probe_module.probe(SERVER)
 
-        self.assertEqual(result, ProbeOk(online=7, max=20, latency_ms=12.5))
+        self.assertEqual(result, ProbeOk(online=7, max=20, latency_ms=12.5, info=INFO))
         lookup.assert_awaited_once_with("play.example.com", timeout=3.0)
         status.assert_awaited_once_with(tries=1)
 
@@ -137,12 +160,12 @@ class BedrockProbeTest(unittest.IsolatedAsyncioTestCase):
         return lookup
 
     async def test_ok_response(self) -> None:
-        status = mock.AsyncMock(return_value=response(3, 10, 40.0))
+        status = mock.AsyncMock(return_value=response(3, 10, 40.0, bedrock=True))
         lookup = self.patch_lookup(status)
 
         result = await probe_module.probe(BEDROCK)
 
-        self.assertEqual(result, ProbeOk(3, 10, 40.0, edition=Edition.BEDROCK))
+        self.assertEqual(result, ProbeOk(3, 10, 40.0, Edition.BEDROCK, INFO))
         lookup.assert_called_once_with("isla.example.com", timeout=3.0)
         status.assert_awaited_once_with(tries=1)
 
@@ -155,7 +178,7 @@ class BedrockProbeTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await probe_module.probe(BEDROCK), ProbeUnresolvable())
 
     async def test_bedrock_server_is_not_probed_as_java(self) -> None:
-        self.patch_lookup(mock.AsyncMock(return_value=response()))
+        self.patch_lookup(mock.AsyncMock(return_value=response(bedrock=True)))
         java_lookup = mock.AsyncMock()
         with mock.patch.object(probe_module.JavaServer, "async_lookup", java_lookup):
             await probe_module.probe(BEDROCK)
@@ -181,20 +204,20 @@ class DetectTest(unittest.IsolatedAsyncioTestCase):
     async def test_only_java_answers(self) -> None:
         self.patch_protocols(mock.AsyncMock(return_value=response(5, 20)), hang)
         result = await probe_module.probe(UNKNOWN)
-        self.assertEqual(result, ProbeOk(5, 20, 12.5, edition=Edition.JAVA))
+        self.assertEqual(result, ProbeOk(5, 20, 12.5, Edition.JAVA, INFO))
 
     async def test_only_bedrock_answers(self) -> None:
         self.patch_protocols(
             mock.AsyncMock(side_effect=ConnectionRefusedError()),
-            mock.AsyncMock(return_value=response(2, 10, 30.0)),
+            mock.AsyncMock(return_value=response(2, 10, 30.0, bedrock=True)),
         )
         result = await probe_module.probe(UNKNOWN)
-        self.assertEqual(result, ProbeOk(2, 10, 30.0, edition=Edition.BEDROCK))
+        self.assertEqual(result, ProbeOk(2, 10, 30.0, Edition.BEDROCK, INFO))
 
     async def test_java_wins_when_both_answer(self) -> None:
         self.patch_protocols(
             mock.AsyncMock(return_value=response(5, 20)),
-            mock.AsyncMock(return_value=response(1, 10)),
+            mock.AsyncMock(return_value=response(1, 10, bedrock=True)),
         )
         result = await probe_module.probe(UNKNOWN)
         assert isinstance(result, ProbeOk)
@@ -205,9 +228,9 @@ class DetectTest(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(0.05)
             return response(5, 20)
 
-        self.patch_protocols(slow_java, mock.AsyncMock(return_value=response(1, 10)))
+        self.patch_protocols(slow_java, mock.AsyncMock(return_value=response(1, 10, bedrock=True)))
         result = await probe_module.probe(UNKNOWN)
-        self.assertEqual(result, ProbeOk(5, 20, 12.5, edition=Edition.JAVA))
+        self.assertEqual(result, ProbeOk(5, 20, 12.5, Edition.JAVA, INFO))
 
     async def test_unresolvable_does_not_wait_for_bedrock(self) -> None:
         self.patch_protocols(mock.AsyncMock(side_effect=socket.gaierror(11001, "x")), hang)

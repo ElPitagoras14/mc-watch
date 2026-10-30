@@ -15,6 +15,8 @@
           <i class="ic" aria-hidden="true">&#xE72B;</i>
         </button>
         <h1 id="title">MC Watch</h1>
+        <input id="title-input" type="text" maxlength="40" hidden spellcheck="false"
+               aria-label="Nombre del servidor">
       </div>
       <div class="actions">
         <button id="btn-refresh" type="button"
@@ -24,6 +26,10 @@
         <button id="btn-add" type="button"
                 title="Agregar servidor" aria-label="Agregar servidor">
           <i class="ic" aria-hidden="true">&#xE710;</i>
+        </button>
+        <button id="btn-delete" class="danger" type="button" hidden
+                title="Eliminar servidor" aria-label="Eliminar servidor">
+          <i class="ic" aria-hidden="true">&#xE74D;</i>
         </button>
         <button id="btn-pin" type="button" aria-pressed="false"
                 title="Fijar panel" aria-label="Fijar panel">
@@ -46,6 +52,38 @@
         <code id="config-path" hidden></code>
       </div>
     </div>
+
+    <section id="detail" hidden>
+      <p class="err detail-err" id="detail-err" role="alert" hidden></p>
+
+      <div class="srv">
+        <div class="icon">
+          <img id="d-img" alt="" width="48" height="48" hidden>
+          <i class="ic" id="d-glyph" aria-hidden="true">&#xE977;</i>
+        </div>
+        <div class="srv-info">
+          <div class="motd" id="d-motd"></div>
+          <div class="facts" id="d-facts"></div>
+          <div class="address" id="d-address"></div>
+        </div>
+      </div>
+      <p class="state-msg" id="d-state" hidden></p>
+
+      <h2 class="sec">Participantes</h2>
+      <ul id="d-names"></ul>
+      <p class="players-msg" id="d-msg" hidden></p>
+      <p class="players-count" id="d-count" hidden></p>
+
+      <div class="confirm" id="confirm" role="alertdialog" aria-labelledby="confirm-msg" hidden>
+        <p id="confirm-msg"></p>
+        <p class="hint">Se quita de la configuración.</p>
+        <p class="err" id="confirm-err" role="alert" hidden></p>
+        <div class="buttons">
+          <button id="confirm-cancel" type="button">Cancelar</button>
+          <button id="confirm-ok" type="button" class="danger">Eliminar</button>
+        </div>
+      </div>
+    </section>
 
     <form id="add-form" novalidate autocomplete="off" hidden>
       <div class="notice" id="form-notice" hidden>

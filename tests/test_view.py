@@ -1,7 +1,16 @@
 import json
 import unittest
 
-from mc_watch.models import Edition, ServerConfig, ServerStatus, Snapshot, State
+from mc_watch.models import (
+    Edition,
+    MotdSegment,
+    PlayersMode,
+    ServerConfig,
+    ServerInfo,
+    ServerStatus,
+    Snapshot,
+    State,
+)
 from mc_watch.view import snapshot_payload
 
 SERVER = ServerConfig("Survival", "play.example.com")
@@ -27,6 +36,13 @@ class SnapshotPayloadTest(unittest.TestCase):
                         "state": "online",
                         "online": 3,
                         "max": 20,
+                        "latency_ms": None,
+                        "version": None,
+                        "motd": [],
+                        "icon": None,
+                        "players_mode": None,
+                        "players": [],
+                        "asleep": False,
                     }
                 ],
                 "updated_at": 1730000000.0,
@@ -35,6 +51,31 @@ class SnapshotPayloadTest(unittest.TestCase):
                 "version": "0.1.0",
             },
         )
+
+    def test_detail_of_an_online_server(self) -> None:
+        info = ServerInfo(motd=(MotdSegment("Hola", "#55ff55", bold=True),), version="1.21.4")
+        status = ServerStatus(
+            SERVER,
+            State.ONLINE,
+            online=2,
+            max=20,
+            info=info,
+            latency_ms=45.0,
+            players_mode=PlayersMode.PARTIAL,
+            players=("Steve", "Alex"),
+        )
+
+        server = snapshot_payload(Snapshot((status,), 1.0), config_path="c", version="0.1.0")[
+            "servers"
+        ][0]
+
+        self.assertEqual(server["motd"][0]["text"], "Hola")
+        self.assertTrue(server["motd"][0]["bold"])
+        self.assertEqual(
+            (server["version"], server["latency_ms"], server["players_mode"], server["players"]),
+            ("1.21.4", 45.0, "partial", ["Steve", "Alex"]),
+        )
+        json.dumps(server)
 
     def test_all_states_use_stable_names(self) -> None:
         snapshot = Snapshot(
