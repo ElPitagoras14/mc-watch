@@ -39,6 +39,13 @@ class NoticesTest(unittest.TestCase):
             ["Alguien está jugando en Survival"],
         )
 
+    def test_a_server_that_changed_address_notifies_nothing(self) -> None:
+        moved = ServerConfig("Survival", "play.example.com:25566")
+        before = status(State.ONLINE, 0, PlayersMode.FULL)
+        after = status(State.ONLINE, 2, PlayersMode.FULL, ("Ana", "Beto"), server=moved)
+
+        self.assertEqual(notices(snap(before), snap(after)), [])
+
     def test_joined_replaces_someone_is_playing(self) -> None:
         self.assertEqual(
             titles(

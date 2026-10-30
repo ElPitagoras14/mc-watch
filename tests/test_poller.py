@@ -316,6 +316,48 @@ class PollerAddTest(unittest.TestCase):
             [(s.server.name, s.state) for s in final.servers], [("Beta", State.ONLINE)]
         )
 
+    def test_change_address_keeps_the_place_and_starts_the_status_over(self) -> None:
+        poller = self.make(Poller([A, B, C], 3600, always_ok))
+        collector = Collector()
+        poller.subscribe(collector)
+        poller.start()
+        self.assertTrue(collector.wait_for(1))
+        moved = ServerConfig("B", "new.example.com:25566")
+
+        poller.change_address("b.example.com", moved, ProbeUnreachable())
+
+        servers = poller.snapshot().servers
+        self.assertEqual(
+            [s.server.address for s in servers],
+            ["a.example.com", "new.example.com:25566", "c.example.com"],
+        )
+        self.assertEqual((servers[1].state, servers[1].failures), (State.QUERYING, 1))
+        self.assertEqual(servers[1].players, ())
+        self.assertEqual(poller.snapshot().updated_at, collector.snapshots[0].updated_at)
+
+    def test_change_address_during_a_cycle_is_not_overwritten_by_it(self) -> None:
+        async def slow(_: ServerConfig, *, query: bool = False) -> ProbeResult:
+            await asyncio.sleep(0.3)
+            return OK
+
+        poller = self.make(Poller([A], 3600, slow))
+        collector = Collector()
+        poller.subscribe(collector)
+        poller.start()
+        time.sleep(0.1)  # the first cycle is in flight
+
+        poller.change_address(
+            "a.example.com", ServerConfig("A", "new.example.com"), ProbeUnreachable()
+        )
+        self.assertTrue(collector.wait_for(2))
+
+        final = collector.snapshots[-1]
+        self.assertIsNotNone(final.updated_at, "el último snapshot cierra el ciclo")
+        self.assertEqual(
+            [(s.server.address, s.state) for s in final.servers],
+            [("new.example.com", State.QUERYING)],
+        )
+
     def test_refresh_server_probes_only_that_server_and_keeps_updated_at(self) -> None:
         probed: list[str] = []
         answer = [OK]

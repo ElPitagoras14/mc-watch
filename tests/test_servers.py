@@ -287,6 +287,91 @@ class RenameAndRemoveTest(ServerManagerTestCase):
         self.assertEqual((renamed["ok"], removed["ok"]), (False, False))
         self.assertEqual([s.server.name for s in poller.snapshot().servers], ["A", "B"])
 
+    def test_change_address_saves_the_file_and_replaces_the_status_in_place(self) -> None:
+        manager, poller = self.started()
+        self.result = BEDROCK_OK
+
+        reply = manager.change_address("a.example.com", " new.example.com:25566 ")
+
+        self.assertEqual(reply, {"ok": True, "address": "new.example.com:25566", "name": "A"})
+        servers = poller.snapshot().servers
+        self.assertEqual(
+            [(s.server.name, s.server.address) for s in servers],
+            [("A", "new.example.com:25566"), ("B", "b.example.com")],
+        )
+        self.assertEqual(
+            (servers[0].state, servers[0].server.edition), (State.ONLINE, Edition.BEDROCK)
+        )
+        saved = load_config(self.directory).servers
+        self.assertEqual(
+            [(s.name, s.address, s.edition) for s in saved],
+            [("A", "new.example.com:25566", Edition.BEDROCK), ("B", "b.example.com", Edition.JAVA)],
+        )
+
+    def test_change_address_validates_like_the_add_form(self) -> None:
+        manager, _ = self.started()
+
+        duplicate = manager.change_address("a.example.com", "B.Example.com")
+        empty = manager.change_address("a.example.com", "  ")
+        same = manager.change_address("a.example.com", "a.example.com")
+
+        self.assertEqual((duplicate["ok"], duplicate["field"]), (False, "address"))
+        self.assertEqual((empty["ok"], empty["field"]), (False, "address"))
+        self.assertTrue(same["ok"])
+        self.assertEqual(self.probed, [], "nada de esto debe consultar un servidor")
+        self.assertEqual(self.path.read_text(encoding="utf-8"), self.TWO)
+
+    def test_change_address_allows_changing_only_the_case(self) -> None:
+        manager, poller = self.started()
+
+        reply = manager.change_address("a.example.com", "A.Example.com")
+
+        self.assertTrue(reply["ok"])
+        self.assertEqual(poller.snapshot().servers[0].server.address, "A.Example.com")
+
+    def test_change_address_to_an_unknown_host_or_a_failed_write_changes_nothing(self) -> None:
+        manager, poller = self.started()
+
+        self.result = ProbeUnresolvable()
+        missing = manager.change_address("a.example.com", "no-existe.invalid")
+        self.result = JAVA_OK
+        with mock.patch(
+            "mc_watch.servers.set_address", side_effect=ConfigWriteError("sin permisos")
+        ):
+            failed = manager.change_address("a.example.com", "new.example.com")
+
+        self.assertEqual(missing["message"], "No se encontró el host")
+        self.assertEqual((failed["ok"], failed["field"]), (False, "address"))
+        self.assertEqual(poller.snapshot().servers[0].server.address, "a.example.com")
+        self.assertEqual(self.path.read_text(encoding="utf-8"), self.TWO)
+
+    def test_change_address_follows_the_address_only_when_it_was_the_name(self) -> None:
+        self.path.write_text(
+            '[[servers]]\nname = "a.example.com"\naddress = "a.example.com"\n\n'
+            '[[servers]]\nname = "B"\naddress = "b.example.com"\n',
+            encoding="utf-8",
+        )
+        manager, poller = self.make()
+        poller.start()
+
+        manager.change_address("a.example.com", "x.example.com")
+        manager.change_address("b.example.com", "y.example.com")
+
+        self.assertEqual([s.server.name for s in poller.snapshot().servers], ["x.example.com", "B"])
+        self.assertEqual(
+            [s.name for s in load_config(self.directory).servers], ["x.example.com", "B"]
+        )
+
+    def test_change_address_without_a_writable_config_changes_nothing(self) -> None:
+        config = Config(servers=(ServerConfig("A", "a.example.com"),), writable=False, error="roto")
+        manager, poller = self.make(config)
+        poller.start()
+
+        reply = manager.change_address("a.example.com", "new.example.com")
+
+        self.assertEqual((reply["ok"], reply["message"]), (False, "roto"))
+        self.assertEqual(poller.snapshot().servers[0].server.address, "a.example.com")
+
     def test_unwritable_config_blocks_both(self) -> None:
         config = Config(servers=(ServerConfig("A", "a.example.com"),), writable=False, error="roto")
         manager, poller = self.make(config)

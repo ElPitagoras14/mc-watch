@@ -45,6 +45,8 @@
     dMotd: $('d-motd'),
     dFacts: $('d-facts'),
     dAddress: $('d-address'),
+    dAddressEdit: $('d-address-edit'),
+    dAddressInput: $('d-address-input'),
     dState: $('d-state'),
     dNames: $('d-names'),
     dMsg: $('d-msg'),
@@ -89,6 +91,9 @@
     busy: false, // an add-server call is in flight
     detail: null, // address of the server whose detail is open
     renaming: false, // the title is an input
+    editingAddress: false, // the address is an input
+    savingAddress: false, // the change-address call is in flight
+    addressTarget: null, // the address being saved, so the detail can follow the server to it
     confirming: false, // the delete confirmation is open
     deleting: false, // the delete call is in flight
     payload: null, // last payload rendered
@@ -259,7 +264,13 @@
     el.sSave.disabled = broken || state.saving;
 
     if (state.view === 'detail') {
-      const server = currentServer();
+      let server = currentServer();
+      if (!server && state.addressTarget) {
+        // The snapshot of a saved address change can arrive before the reply: follow the server.
+        const target = state.addressTarget.toLowerCase();
+        server = payload.servers.find((s) => s.address.toLowerCase() === target) || null;
+        if (server) state.detail = server.address;
+      }
       if (server) renderDetail(server);
       else leaveDetail(); // it was deleted (here or in the file)
     }
@@ -513,6 +524,7 @@
 
   function leaveDetail() {
     if (state.renaming) endRename();
+    if (state.editingAddress) endAddressEdit();
     state.confirming = false;
     state.deleting = false;
     el.confirm.hidden = true;
@@ -690,12 +702,115 @@
     return { ok: true, name: normalized };
   }
 
+  // --- Change address ------------------------------------------------------
+
+  function setAddressInput(on) {
+    el.dAddress.hidden = on;
+    el.dAddressEdit.hidden = on;
+    el.dAddressInput.hidden = !on;
+    scheduleHeight();
+  }
+
+  function startAddressEdit() {
+    if (state.view !== 'detail' || state.editingAddress || state.confirming) return;
+    const server = currentServer();
+    if (!server) return;
+    state.editingAddress = true;
+    hideDetailError();
+    el.dAddressInput.value = server.address;
+    el.dAddressInput.disabled = false;
+    setAddressInput(true);
+    el.dAddressInput.focus();
+    el.dAddressInput.select();
+  }
+
+  function endAddressEdit() {
+    state.editingAddress = false;
+    setAddressInput(false);
+  }
+
+  // Not while the call is in flight: the input is disabled and the result decides what happens.
+  function cancelAddressEdit() {
+    if (!state.editingAddress || state.savingAddress) return;
+    endAddressEdit();
+  }
+
+  async function commitAddress() {
+    if (!state.editingAddress || state.savingAddress) return;
+    const address = state.detail;
+    const server = currentServer();
+    const value = el.dAddressInput.value.trim();
+    if (!server) return;
+    if (value === server.address) {
+      endAddressEdit();
+      return;
+    }
+    state.savingAddress = true;
+    state.addressTarget = value;
+    el.dAddressInput.disabled = true;
+    hideDetailError();
+    let reply;
+    try {
+      reply = await changeAddress(address, value);
+    } catch (error) {
+      reply = { ok: false, message: 'No se pudo cambiar la dirección' };
+    }
+    state.savingAddress = false;
+    state.addressTarget = null;
+    el.dAddressInput.disabled = false;
+    // The detail was left while the call was in flight: nothing to show.
+    if (!state.editingAddress) return;
+    if (reply.ok) {
+      state.detail = reply.address;
+      endAddressEdit();
+      const moved = currentServer();
+      if (moved) renderDetail(moved);
+    } else {
+      showDetailError(reply.message);
+      el.dAddressInput.focus();
+    }
+  }
+
+  async function changeAddress(address, newAddress) {
+    const api = bridge();
+    if (api) return api.change_address(address, newAddress);
+    if (window.__MCW_PREVIEW__) return previewChangeAddress(address, newAddress);
+    throw new Error('sin conexión con la app');
+  }
+
+  // Preview only: nothing is saved. "fail" simulates a config that cannot be written and `.invalid`
+  // hosts fail to resolve.
+  async function previewChangeAddress(address, value) {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    const fail = (message) => ({ ok: false, field: 'address', message });
+    if (!value) return fail('La dirección es obligatoria');
+    const port = /^[^\s:]+(?::(\d{1,5}))?$/.exec(value);
+    if (!port || (port[1] !== undefined && (Number(port[1]) < 1 || Number(port[1]) > 65535))) {
+      return fail('La dirección no es válida (host o host:puerto)');
+    }
+    const key = value.toLowerCase();
+    if (state.payload.servers.some((s) => s.address !== address && s.address.toLowerCase() === key)) {
+      return fail('Ese servidor ya está en la lista');
+    }
+    if (/fail/i.test(value)) return fail('No se pudo guardar el archivo');
+    if (/\.invalid(:\d+)?$/i.test(value)) return fail('No se encontró el host');
+    let name = '';
+    const servers = state.payload.servers.map((s) => {
+      if (s.address !== address) return s;
+      name = s.name === s.address ? value : s.name;
+      return { ...s, address: value, name };
+    });
+    render({ ...state.payload, servers });
+    return { ok: true, address: value, name };
+  }
+
   // --- Delete --------------------------------------------------------------
 
   function openConfirm() {
     const server = currentServer();
-    if (state.view !== 'detail' || state.confirming || !server) return;
+    if (state.view !== 'detail' || state.confirming || state.savingAddress || !server) return;
     if (state.renaming) endRename();
+    if (state.editingAddress) endAddressEdit();
     state.confirming = true;
     el.confirmMsg.textContent = `¿Eliminar "${server.name}"?`;
     el.confirmErr.hidden = true;
@@ -870,7 +985,7 @@
   // Click on a notification: that server's detail, or the list when it is gone. Whatever was
   // half done (form, dialog, rename, confirmation) is dropped.
   function showServer(address) {
-    if (state.saving || state.busy || state.deleting) return;
+    if (state.saving || state.busy || state.deleting || state.savingAddress) return;
     if (state.settingsOpen) closeSettings();
     if (state.view === 'form') closeForm();
     if (state.view === 'detail') leaveDetail();
@@ -884,6 +999,7 @@
   function onEscape() {
     if (state.settingsOpen) closeSettings();
     else if (state.renaming) endRename();
+    else if (state.editingAddress) cancelAddressEdit();
     else if (state.confirming) closeConfirm();
     else if (state.view === 'form' && !state.busy) closeForm();
     else if (state.view === 'detail') leaveDetail();
@@ -949,6 +1065,24 @@
     }
   });
   el.titleInput.addEventListener('blur', commitRename);
+  el.dAddress.addEventListener('click', startAddressEdit);
+  el.dAddress.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      startAddressEdit();
+    }
+  });
+  el.dAddressEdit.addEventListener('click', startAddressEdit);
+  el.dAddressInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commitAddress();
+    } else if (event.key === 'Escape') {
+      event.stopPropagation(); // cancel the edit only: the detail stays open
+      cancelAddressEdit();
+    }
+  });
+  el.dAddressInput.addEventListener('blur', cancelAddressEdit);
   el.del.addEventListener('click', openConfirm);
   el.confirmCancel.addEventListener('click', closeConfirm);
   el.confirmOk.addEventListener('click', confirmDelete);

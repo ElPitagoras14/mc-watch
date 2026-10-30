@@ -47,6 +47,7 @@ class App:
             add_server=self.servers.add_server,
             refresh=self.poller.refresh,
             rename_server=self.servers.rename_server,
+            change_address=self.servers.change_address,
             remove_server=self.servers.remove_server,
             refresh_server=self.poller.refresh_server,
             save_settings=self.settings.save,
