@@ -14,12 +14,124 @@ from typing import Any
 
 from mc_watch import __version__
 from mc_watch.config import config_path
-from mc_watch.models import Edition, ServerConfig, ServerStatus, Snapshot, State
+from mc_watch.models import (
+    Edition,
+    MotdSegment,
+    PlayersMode,
+    ServerConfig,
+    ServerInfo,
+    ServerStatus,
+    Snapshot,
+    State,
+)
 from mc_watch.view import snapshot_payload
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
 UI_FILES = ("styles.css", "app.js")
 INJECTION_POINT = '<script src="app.js"></script>'
+
+# A 16x16 grass-and-dirt tile, standing in for a server icon.
+ICON = (
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAANElEQVR4nGOImGZCEmKgvYbKUCsgSn"
+    "TRgzAIchlIUg3SQJJqIJeBJNVQJ5HkjVFPDw5PAwBj0QQ+8IyoNAAAAABJRU5ErkJggg=="
+)
+
+
+def _online(
+    name: str,
+    address: str,
+    online: int,
+    max_players: int,
+    mode: PlayersMode,
+    players: tuple[str, ...] = (),
+    *,
+    motd: tuple[MotdSegment, ...] = (),
+    edition: Edition = Edition.JAVA,
+    icon: str | None = ICON,
+    version: str = "Paper 1.21.4",
+) -> ServerStatus:
+    return ServerStatus(
+        ServerConfig(name, address, edition),
+        State.ONLINE,
+        online,
+        max_players,
+        info=ServerInfo(motd=motd, version=version, icon=icon),
+        latency_ms=42.0,
+        players_mode=mode,
+        players=players,
+    )
+
+
+def _detail_servers() -> list[ServerStatus]:
+    green, gold, aqua = "#55ff55", "#ffaa00", "#55ffff"
+    return [
+        _online(
+            "Survival",
+            "play.example.com",
+            3,
+            20,
+            PlayersMode.FULL,
+            ("Steve", "Alex", "Notch"),
+            motd=(
+                MotdSegment("Bienvenidos a ", green),
+                MotdSegment("Survival", gold, bold=True),
+                MotdSegment("\nTemporada 4 · ", None, italic=True),
+                MotdSegment("tienda", aqua, underlined=True),
+            ),
+        ),
+        _online(
+            "Vacío",
+            "vacio.example.com",
+            0,
+            20,
+            PlayersMode.FULL,
+            motd=(MotdSegment("Nadie por aquí"),),
+        ),
+        _online(
+            "Parcial",
+            "parcial.example.com",
+            23,
+            100,
+            PlayersMode.PARTIAL,
+            ("Dream", "Technoblade", "Sapnap", "Georgenotfound", "Karl_Jacobs"),
+            motd=(MotdSegment("Muestra parcial", gold),),
+        ),
+        _online("Oculto", "oculto.example.com", 12840, 50000, PlayersMode.HIDDEN),
+        _online(
+            "Isla",
+            "isla.example.com",
+            4,
+            10,
+            PlayersMode.HIDDEN,
+            motd=(MotdSegment("Bedrock"),),
+            edition=Edition.BEDROCK,
+            icon=None,
+            version="1.21.50",
+        ),
+        ServerStatus(
+            ServerConfig("Aternos", "mecotronicos.aternos.me", Edition.JAVA),
+            State.OFFLINE,
+            asleep=True,
+        ),
+        _online(
+            "MOTD con marcado",
+            "marcado.example.com",
+            1,
+            20,
+            PlayersMode.FULL,
+            ("Steve",),
+            motd=(MotdSegment("<img src=x onerror=alert(1)> <b>negrita</b>", "#ff5555"),),
+            icon=None,
+        ),
+        _online(
+            "Sin permisos de escritura",
+            "readonly.example.com",
+            2,
+            20,
+            PlayersMode.FULL,
+            ("Steve", "Alex"),
+        ),
+    ]
 
 
 def _scenario(
@@ -70,6 +182,7 @@ def scenarios(now: float) -> list[dict[str, Any]]:
     ]
     return [
         _scenario("Cuatro estados", mixed, now - 12),
+        _scenario("Detalle", _detail_servers(), now - 12),
         _scenario("Vacío", [], now - 5),
         _scenario("Muchos (scroll)", many, now - 75),
         _scenario("Antes del 1er ciclo", starting, None),

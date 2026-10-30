@@ -33,6 +33,9 @@ class App:
             lambda: self._payload(self.poller.snapshot()),
             add_server=self.servers.add_server,
             refresh=self.poller.refresh,
+            rename_server=self.servers.rename_server,
+            remove_server=self.servers.remove_server,
+            refresh_server=self.poller.refresh_server,
         )
         self.tray = Tray(
             on_toggle=self.panel.toggle,

@@ -30,7 +30,7 @@ class ServerManagerTestCase(unittest.TestCase):
         self.probed: list[ServerConfig] = []
         self.result: ProbeResult = JAVA_OK
 
-    async def probe_fn(self, server: ServerConfig) -> ProbeResult:
+    async def probe_fn(self, server: ServerConfig, *, query: bool = False) -> ProbeResult:
         self.probed.append(server)
         return self.result
 
@@ -237,6 +237,64 @@ class PersistDetectedEditionTest(ServerManagerTestCase):
             self.assertLogs("mc_watch.servers", level="WARNING"),
         ):
             self.run_one_cycle(config)
+
+
+class RenameAndRemoveTest(ServerManagerTestCase):
+    TWO = (
+        '[[servers]]\nname = "A"\naddress = "a.example.com"\nedition = "java"\n\n'
+        '[[servers]]\nname = "B"\naddress = "b.example.com"\nedition = "java"\n'
+    )
+
+    def started(self) -> tuple[ServerManager, Poller]:
+        self.path.write_text(self.TWO, encoding="utf-8")
+        manager, poller = self.make()
+        poller.start()
+        return manager, poller
+
+    def test_rename_and_remove_save_the_file_and_update_the_poller(self) -> None:
+        manager, poller = self.started()
+
+        self.assertEqual(
+            manager.rename_server("a.example.com", "  Alfa "), {"ok": True, "name": "Alfa"}
+        )
+        self.assertEqual(manager.remove_server("b.example.com"), {"ok": True})
+
+        self.assertEqual([s.server.name for s in poller.snapshot().servers], ["Alfa"])
+        self.assertEqual([s.name for s in load_config(self.directory).servers], ["Alfa"])
+
+    def test_empty_name_falls_back_to_the_address_and_a_long_one_is_rejected(self) -> None:
+        manager, poller = self.started()
+
+        manager.rename_server("a.example.com", "  ")
+        reply = manager.rename_server("b.example.com", "x" * 41)
+
+        self.assertEqual(poller.snapshot().servers[0].server.name, "a.example.com")
+        self.assertEqual((reply["ok"], reply["field"]), (False, "name"))
+        self.assertEqual(poller.snapshot().servers[1].server.name, "B")
+
+    def test_write_failure_changes_nothing(self) -> None:
+        manager, poller = self.started()
+
+        with (
+            mock.patch("mc_watch.servers.set_name", side_effect=ConfigWriteError("sin permisos")),
+            mock.patch(
+                "mc_watch.servers.remove_server", side_effect=ConfigWriteError("sin permisos")
+            ),
+        ):
+            renamed = manager.rename_server("a.example.com", "Alfa")
+            removed = manager.remove_server("b.example.com")
+
+        self.assertEqual((renamed["ok"], removed["ok"]), (False, False))
+        self.assertEqual([s.server.name for s in poller.snapshot().servers], ["A", "B"])
+
+    def test_unwritable_config_blocks_both(self) -> None:
+        config = Config(servers=(ServerConfig("A", "a.example.com"),), writable=False, error="roto")
+        manager, poller = self.make(config)
+        poller.start()
+
+        self.assertFalse(manager.rename_server("a.example.com", "Alfa")["ok"])
+        self.assertFalse(manager.remove_server("a.example.com")["ok"])
+        self.assertEqual(len(poller.snapshot().servers), 1)
 
 
 if __name__ == "__main__":

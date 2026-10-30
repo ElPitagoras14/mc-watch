@@ -100,6 +100,15 @@ class _Api:
     def refresh(self) -> None:
         self._panel.refresh()
 
+    def refresh_server(self, address: str) -> None:
+        self._panel.refresh_server(address)
+
+    def rename_server(self, address: str, name: str) -> Payload:
+        return self._panel.rename_server(address, name)
+
+    def remove_server(self, address: str) -> Payload:
+        return self._panel.remove_server(address)
+
 
 class Panel:
     def __init__(
@@ -107,10 +116,16 @@ class Panel:
         get_payload: Callable[[], Payload],
         add_server: Callable[[str, str], Payload] | None = None,
         refresh: Callable[[], None] | None = None,
+        rename_server: Callable[[str, str], Payload] | None = None,
+        remove_server: Callable[[str], Payload] | None = None,
+        refresh_server: Callable[[str], None] | None = None,
     ) -> None:
         self.get_payload = get_payload
         self._add_server = add_server
         self._refresh = refresh
+        self._rename_server = rename_server
+        self._remove_server = remove_server
+        self._refresh_server = refresh_server
         self._lock = threading.RLock()
         self._guard = ReopenGuard()
         self._pinned = False
@@ -226,6 +241,23 @@ class Panel:
         if self._add_server is None:
             return {"ok": False, "field": None, "message": "No se pueden agregar servidores"}
         return self._add_server(name, address)
+
+    def rename_server(self, address: str, name: str) -> Payload:
+        """Called from the page; blocks until the new name is saved."""
+        if self._rename_server is None:
+            return {"ok": False, "field": None, "message": "No se puede renombrar"}
+        return self._rename_server(address, name)
+
+    def remove_server(self, address: str) -> Payload:
+        """Called from the page; blocks until the server is deleted from the file."""
+        if self._remove_server is None:
+            return {"ok": False, "field": None, "message": "No se puede eliminar"}
+        return self._remove_server(address)
+
+    def refresh_server(self, address: str) -> None:
+        """Called from the page; blocks until that server was polled."""
+        if self._refresh_server is not None:
+            self._refresh_server(address)
 
     def refresh(self) -> None:
         """Called from the page: poll every server now."""

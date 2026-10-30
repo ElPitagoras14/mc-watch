@@ -20,7 +20,7 @@ C = ServerConfig("C", "c.example.com")
 OK = ProbeOk(online=3, max=20, latency_ms=10.0)
 
 
-async def always_ok(_: ServerConfig) -> ProbeResult:
+async def always_ok(_: ServerConfig, *, query: bool = False) -> ProbeResult:
     return OK
 
 
@@ -96,7 +96,7 @@ class PollerTest(unittest.TestCase):
         Poller([A], 1, always_ok).stop()
 
     def test_servers_are_probed_concurrently(self) -> None:
-        async def slow(_: ServerConfig) -> ProbeResult:
+        async def slow(_: ServerConfig, *, query: bool = False) -> ProbeResult:
             await asyncio.sleep(0.3)
             return OK
 
@@ -112,7 +112,7 @@ class PollerTest(unittest.TestCase):
         self.assertLess(elapsed, 0.8, "tres consultas de 0.3 s en paralelo no pueden sumar 0.9 s")
 
     def test_slow_server_does_not_delay_the_others_results(self) -> None:
-        async def mixed(server: ServerConfig) -> ProbeResult:
+        async def mixed(server: ServerConfig, *, query: bool = False) -> ProbeResult:
             if server is B:
                 return ProbeUnreachable()
             return OK
@@ -129,7 +129,7 @@ class PollerTest(unittest.TestCase):
     def test_cycles_are_scheduled_start_to_start(self) -> None:
         starts: list[float] = []
 
-        async def timed(_: ServerConfig) -> ProbeResult:
+        async def timed(_: ServerConfig, *, query: bool = False) -> ProbeResult:
             starts.append(time.monotonic())
             await asyncio.sleep(0.1)
             return OK
@@ -149,7 +149,7 @@ class PollerTest(unittest.TestCase):
     def test_state_machine_is_applied_across_cycles(self) -> None:
         results: list[ProbeResult] = [OK, ProbeUnreachable(), ProbeUnreachable()]
 
-        async def scripted(_: ServerConfig) -> ProbeResult:
+        async def scripted(_: ServerConfig, *, query: bool = False) -> ProbeResult:
             return results.pop(0) if results else ProbeUnreachable()
 
         poller = self.make(Poller([A], 0.03, scripted))
@@ -162,7 +162,7 @@ class PollerTest(unittest.TestCase):
         self.assertEqual(states, [State.ONLINE, State.ONLINE, State.OFFLINE])
 
     def test_probe_function_that_raises_is_treated_as_unreachable(self) -> None:
-        async def broken(_: ServerConfig) -> ProbeResult:
+        async def broken(_: ServerConfig, *, query: bool = False) -> ProbeResult:
             raise RuntimeError("bug")
 
         poller = self.make(Poller([A], 0.03, broken))
@@ -246,7 +246,7 @@ class PollerAddTest(unittest.TestCase):
     def test_added_server_is_probed_in_the_next_cycle(self) -> None:
         probed: set[str] = set()
 
-        async def recording(server: ServerConfig) -> ProbeResult:
+        async def recording(server: ServerConfig, *, query: bool = False) -> ProbeResult:
             probed.add(server.name)
             return OK
 
@@ -263,7 +263,7 @@ class PollerAddTest(unittest.TestCase):
         self.assertEqual(probed, {"A", "B"})
 
     def test_server_added_during_a_cycle_is_not_lost(self) -> None:
-        async def slow(_: ServerConfig) -> ProbeResult:
+        async def slow(_: ServerConfig, *, query: bool = False) -> ProbeResult:
             await asyncio.sleep(0.3)
             return OK
 
@@ -280,6 +280,81 @@ class PollerAddTest(unittest.TestCase):
         self.assertIsNotNone(final.updated_at, "el segundo snapshot cierra el ciclo")
         self.assertEqual([s.server.name for s in final.servers], ["A", "B"])
         self.assertEqual([s.state for s in final.servers], [State.ONLINE, State.ONLINE])
+
+    def test_rename_and_remove_publish_without_moving_updated_at(self) -> None:
+        poller = self.make(Poller([A, B], 3600, always_ok))
+        collector = Collector()
+        poller.subscribe(collector)
+        poller.start()
+        self.assertTrue(collector.wait_for(1))
+        cycle = collector.snapshots[0]
+
+        poller.rename("B.example.com", "Beta")
+        poller.remove("a.example.com")
+
+        self.assertEqual([s.server.name for s in poller.snapshot().servers], ["Beta"])
+        self.assertEqual(poller.snapshot().updated_at, cycle.updated_at)
+
+    def test_rename_and_remove_during_a_cycle_survive_its_end(self) -> None:
+        async def slow(_: ServerConfig, *, query: bool = False) -> ProbeResult:
+            await asyncio.sleep(0.3)
+            return OK
+
+        poller = self.make(Poller([A, B], 3600, slow))
+        collector = Collector()
+        poller.subscribe(collector)
+        poller.start()
+        time.sleep(0.1)  # the first cycle is in flight
+
+        poller.rename("b.example.com", "Beta")
+        poller.remove("a.example.com")
+        self.assertTrue(collector.wait_for(3))
+
+        final = collector.snapshots[-1]
+        self.assertIsNotNone(final.updated_at, "el último snapshot cierra el ciclo")
+        self.assertEqual(
+            [(s.server.name, s.state) for s in final.servers], [("Beta", State.ONLINE)]
+        )
+
+    def test_refresh_server_probes_only_that_server_and_keeps_updated_at(self) -> None:
+        probed: list[str] = []
+        answer = [OK]
+
+        async def recording(server: ServerConfig, *, query: bool = False) -> ProbeResult:
+            probed.append(server.name)
+            return answer[0]
+
+        poller = self.make(Poller([A, B], 3600, recording))
+        collector = Collector()
+        poller.subscribe(collector)
+        poller.start()
+        self.assertTrue(collector.wait_for(1))
+        cycle = collector.snapshots[0]
+        probed.clear()
+        answer[0] = ProbeOk(online=9, max=20, latency_ms=5.0)
+
+        poller.refresh_server("B.example.com")
+
+        self.assertEqual(probed, ["B"])
+        servers = poller.snapshot().servers
+        self.assertEqual([s.online for s in servers], [3, 9])
+        self.assertEqual(poller.snapshot().updated_at, cycle.updated_at)
+
+    def test_probe_asks_for_query_only_when_the_status_wants_it(self) -> None:
+        asked: dict[str, bool] = {}
+
+        async def recording(server: ServerConfig, *, query: bool = False) -> ProbeResult:
+            asked[server.name] = query
+            return OK
+
+        java = ServerConfig("J", "j.example.com", Edition.JAVA)
+        poller = self.make(Poller([A, java], 3600, recording))
+        collector = Collector()
+        poller.subscribe(collector)
+        poller.start()
+        self.assertTrue(collector.wait_for(1))
+
+        self.assertEqual(asked, {"A": False, "J": True})
 
     def test_submit_runs_a_coroutine_on_the_poller_loop(self) -> None:
         poller = self.make(Poller([], 3600, always_ok))
@@ -320,7 +395,7 @@ class PollerRefreshTest(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 1)
 
     def test_refresh_during_a_cycle_is_ignored(self) -> None:
-        async def slow(_: ServerConfig) -> ProbeResult:
+        async def slow(_: ServerConfig, *, query: bool = False) -> ProbeResult:
             await asyncio.sleep(0.3)
             return OK
 
@@ -339,7 +414,7 @@ class PollerRefreshTest(unittest.TestCase):
     def test_next_periodic_cycle_counts_from_the_manual_one(self) -> None:
         starts: list[float] = []
 
-        async def timed(_: ServerConfig) -> ProbeResult:
+        async def timed(_: ServerConfig, *, query: bool = False) -> ProbeResult:
             starts.append(time.monotonic())
             return OK
 

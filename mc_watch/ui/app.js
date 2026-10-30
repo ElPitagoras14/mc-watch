@@ -12,6 +12,7 @@
   const el = {
     app: $('app'),
     title: $('title'),
+    titleInput: $('title-input'),
     sectionTitle: $('section-title'),
     list: $('list'),
     servers: $('servers'),
@@ -24,6 +25,7 @@
     refresh: $('btn-refresh'),
     add: $('btn-add'),
     back: $('btn-back'),
+    del: $('btn-delete'),
     pin: $('btn-pin'),
     close: $('btn-close'),
     form: $('add-form'),
@@ -36,6 +38,22 @@
     formMsg: $('form-msg'),
     cancel: $('f-cancel'),
     submit: $('f-submit'),
+    detail: $('detail'),
+    detailErr: $('detail-err'),
+    dImg: $('d-img'),
+    dGlyph: $('d-glyph'),
+    dMotd: $('d-motd'),
+    dFacts: $('d-facts'),
+    dAddress: $('d-address'),
+    dState: $('d-state'),
+    dNames: $('d-names'),
+    dMsg: $('d-msg'),
+    dCount: $('d-count'),
+    confirm: $('confirm'),
+    confirmMsg: $('confirm-msg'),
+    confirmErr: $('confirm-err'),
+    confirmCancel: $('confirm-cancel'),
+    confirmOk: $('confirm-ok'),
   };
 
   const REFRESH_TIMEOUT_MS = 15000;
@@ -43,12 +61,17 @@
   const state = {
     updatedAt: null,
     refreshing: false, // a manual cycle was requested and its result has not arrived
+    refreshingOne: false, // the open server is being polled
     refreshFrom: null,
     refreshTimer: null,
     pinned: false,
     lastHeight: 0,
-    view: 'list', // 'list' | 'form'
+    view: 'list', // 'list' | 'form' | 'detail'
     busy: false, // an add-server call is in flight
+    detail: null, // address of the server whose detail is open
+    renaming: false, // the title is an input
+    confirming: false, // the delete confirmation is open
+    deleting: false, // the delete call is in flight
     payload: null, // last payload rendered
   };
 
@@ -71,6 +94,10 @@
   function buildRow(server) {
     const row = document.createElement('li');
     row.className = 'server';
+    row.tabIndex = 0;
+    row.setAttribute('role', 'button');
+    row.setAttribute('aria-label', `${server.name}, ${STATE_LABELS[server.state] || server.state}`);
+    row.dataset.address = server.address;
 
     const info = document.createElement('div');
     info.className = 'info';
@@ -113,7 +140,8 @@
   }
 
   // Height the panel would have if nothing were clipped: its own padding and border, plus every
-  // visible child with its margins (flex items' margins do not collapse). The list counts in full.
+  // visible child with its margins (flex items' margins do not collapse). The list and the detail
+  // count in full: they are the parts that scroll.
   function naturalHeight() {
     const px = (value) => parseFloat(value) || 0;
     const own = getComputedStyle(el.app);
@@ -122,7 +150,8 @@
     for (const child of el.app.children) {
       if (child.hidden) continue;
       const style = getComputedStyle(child);
-      const height = child === el.list ? child.scrollHeight : child.offsetHeight;
+      const scrolls = child === el.list || child === el.detail;
+      const height = scrolls ? child.scrollHeight : child.offsetHeight;
       total += height + px(style.marginTop) + px(style.marginBottom);
     }
     return Math.ceil(total);
@@ -169,6 +198,12 @@
     el.noticePath.textContent = payload.config_path;
     el.submit.disabled = broken || state.busy;
 
+    if (state.view === 'detail') {
+      const server = currentServer();
+      if (server) renderDetail(server);
+      else leaveDetail(); // it was deleted (here or in the file)
+    }
+
     updateFooter();
     scheduleHeight();
   }
@@ -192,16 +227,52 @@
 
   // --- Manual refresh ------------------------------------------------------
 
+  function syncRefreshButton() {
+    const busy = state.refreshing || state.refreshingOne;
+    el.refresh.disabled = busy;
+    el.refresh.classList.toggle('busy', busy);
+    el.refresh.setAttribute('aria-busy', String(busy));
+  }
+
   function setRefreshing(on) {
     state.refreshing = on;
     clearTimeout(state.refreshTimer);
-    el.refresh.disabled = on;
-    el.refresh.classList.toggle('busy', on);
-    el.refresh.setAttribute('aria-busy', String(on));
+    syncRefreshButton();
     if (on) state.refreshTimer = setTimeout(() => setRefreshing(false), REFRESH_TIMEOUT_MS);
   }
 
+  // In the detail the button polls only the open server; the call returns when it is done and
+  // the poller has already pushed the new data.
+  async function refreshOne() {
+    if (state.refreshingOne) return;
+    state.refreshingOne = true;
+    syncRefreshButton();
+    try {
+      await refreshServer(state.detail);
+    } catch (error) {
+      // The next cycle brings the data anyway.
+    }
+    state.refreshingOne = false;
+    syncRefreshButton();
+  }
+
+  async function refreshServer(address) {
+    const api = bridge();
+    if (api) return api.refresh_server(address);
+    if (window.__MCW_PREVIEW__) {
+      return new Promise((resolve) => setTimeout(() => {
+        render({ ...state.payload });
+        resolve();
+      }, 800));
+    }
+    throw new Error('sin conexión con la app');
+  }
+
   function refresh() {
+    if (state.view === 'detail') {
+      refreshOne();
+      return;
+    }
     if (state.refreshing) return;
     state.refreshFrom = state.updatedAt;
     setRefreshing(true);
@@ -213,6 +284,43 @@
   // Preview only: pretend a cycle ran.
   function previewRefresh() {
     setTimeout(() => render({ ...state.payload, updated_at: Date.now() / 1000 }), 800);
+  }
+
+  // --- Views ---------------------------------------------------------------
+
+  function showView(view) {
+    state.view = view;
+    const list = view === 'list';
+    const form = view === 'form';
+    const detail = view === 'detail';
+    el.back.hidden = list;
+    el.refresh.hidden = form;
+    el.refresh.title = detail ? 'Actualizar este servidor' : 'Actualizar ahora';
+    el.refresh.setAttribute('aria-label', el.refresh.title);
+    el.add.hidden = !list;
+    el.del.hidden = !detail;
+    el.sectionTitle.hidden = !list;
+    el.list.hidden = !list;
+    el.form.hidden = !form;
+    el.detail.hidden = !detail;
+    el.title.classList.toggle('editable', detail);
+    el.title.tabIndex = detail ? 0 : -1;
+    if (detail) {
+      el.title.setAttribute('role', 'button');
+      el.title.title = 'Click para renombrar';
+    } else {
+      el.title.removeAttribute('role');
+      el.title.removeAttribute('title');
+      el.title.textContent = form ? 'Agregar servidor' : 'MC Watch';
+    }
+    if (form) el.address.focus();
+    scheduleHeight();
+  }
+
+  // Esc and the back button: one level up.
+  function goBack() {
+    if (state.view === 'form') closeForm();
+    else if (state.view === 'detail') leaveDetail();
   }
 
   // --- Add-server form -----------------------------------------------------
@@ -238,20 +346,6 @@
     el.cancel.disabled = busy;
     el.submit.disabled = busy || Boolean(state.payload && state.payload.config_error);
     el.submit.textContent = busy ? 'Detectando…' : 'Agregar';
-  }
-
-  function showView(view) {
-    state.view = view;
-    const form = view === 'form';
-    el.title.textContent = form ? 'Agregar servidor' : 'MC Watch';
-    el.back.hidden = !form;
-    el.refresh.hidden = form;
-    el.add.hidden = form;
-    el.sectionTitle.hidden = form;
-    el.list.hidden = form;
-    el.form.hidden = !form;
-    if (form) el.address.focus();
-    scheduleHeight();
   }
 
   function openForm() {
@@ -328,9 +422,290 @@
       state: unknown ? 'querying' : 'online',
       online: unknown ? null : 0,
       max: unknown ? null : 20,
+      latency_ms: unknown ? null : 20,
+      version: unknown ? null : '1.21.4',
+      motd: [],
+      icon: null,
+      players_mode: unknown ? null : 'full',
+      players: [],
+      asleep: false,
     };
     render({ ...state.payload, servers: [...state.payload.servers, server] });
     return { ok: true };
+  }
+
+  // --- Server detail -------------------------------------------------------
+
+  const currentServer = () => (state.payload
+    ? state.payload.servers.find((s) => s.address === state.detail) || null
+    : null);
+
+  function openDetail(address) {
+    state.detail = address;
+    hideDetailError();
+    showView('detail');
+    const server = currentServer();
+    if (server) renderDetail(server);
+    scheduleHeight();
+  }
+
+  function leaveDetail() {
+    if (state.renaming) endRename();
+    state.confirming = false;
+    state.deleting = false;
+    el.confirm.hidden = true;
+    state.detail = null;
+    hideDetailError();
+    showView('list');
+  }
+
+  function hideDetailError() {
+    el.detailErr.hidden = true;
+    el.detailErr.textContent = '';
+  }
+
+  function showDetailError(message) {
+    el.detailErr.textContent = message;
+    el.detailErr.hidden = false;
+    scheduleHeight();
+  }
+
+  // The MOTD is built from segments with textContent: nothing the server sends is ever parsed
+  // as HTML.
+  function renderMotd(segments) {
+    const spans = segments.map((segment) => {
+      const span = document.createElement('span');
+      span.textContent = segment.text;
+      if (segment.color) span.style.color = segment.color;
+      if (segment.bold) span.style.fontWeight = '700';
+      if (segment.italic) span.style.fontStyle = 'italic';
+      const lines = [];
+      if (segment.underlined) lines.push('underline');
+      if (segment.strikethrough) lines.push('line-through');
+      if (lines.length) span.style.textDecoration = lines.join(' ');
+      return span;
+    });
+    el.dMotd.replaceChildren(...spans);
+  }
+
+  function renderStateMessage(server) {
+    el.dState.hidden = server.state === 'online';
+    if (server.state === 'online') return;
+    let text = 'Consultando…';
+    if (server.state === 'offline') {
+      text = server.asleep
+        ? 'Offline: el proveedor responde, pero el servidor está apagado.'
+        : 'Offline: el servidor no responde.';
+    } else if (server.state === 'error') {
+      text = 'Error: no se encontró el host.';
+    }
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.setAttribute('aria-hidden', 'true');
+    const label = document.createElement('span');
+    label.textContent = text;
+    el.dState.dataset.state = server.state;
+    el.dState.replaceChildren(dot, label);
+  }
+
+  function renderPlayers(server) {
+    const names = server.players || [];
+    let message = '';
+    let count = '';
+    let list = [];
+    if (server.state !== 'online') {
+      message = 'Sin datos de jugadores.';
+    } else if (server.players_mode === 'hidden') {
+      message = 'Este servidor no comparte la lista de jugadores';
+      count = `${server.online}/${server.max}`;
+    } else if (names.length === 0) {
+      message = 'Nadie está jugando';
+    } else {
+      list = names;
+      if (server.players_mode === 'partial') count = `${names.length} de ${server.online} jugadores`;
+    }
+    el.dNames.replaceChildren(...list.map((name) => {
+      const item = document.createElement('li');
+      item.textContent = name;
+      return item;
+    }));
+    el.dMsg.textContent = message;
+    el.dMsg.hidden = !message;
+    el.dCount.textContent = count;
+    el.dCount.hidden = !count;
+  }
+
+  function renderDetail(server) {
+    if (!state.renaming) el.title.textContent = server.name;
+    const online = server.state === 'online';
+
+    el.dAddress.textContent = server.address;
+    el.dAddress.title = server.address;
+    if (server.icon) {
+      if (el.dImg.getAttribute('src') !== server.icon) el.dImg.src = server.icon;
+    } else {
+      el.dImg.removeAttribute('src');
+    }
+    el.dImg.hidden = !server.icon;
+    el.dGlyph.hidden = Boolean(server.icon);
+
+    renderMotd(online ? server.motd : []);
+    const facts = [];
+    if (online && server.version) facts.push(server.version);
+    if (online && server.latency_ms !== null) facts.push(`${Math.round(server.latency_ms)} ms`);
+    if (server.edition === 'bedrock') facts.push('Bedrock');
+    el.dFacts.textContent = facts.join(' · ');
+
+    renderStateMessage(server);
+    renderPlayers(server);
+    scheduleHeight();
+  }
+
+  // Row click or Enter/Space on a focused row.
+  function onRowActivate(event) {
+    const row = event.target.closest('.server');
+    if (row && row.dataset.address) openDetail(row.dataset.address);
+  }
+
+  // --- Rename --------------------------------------------------------------
+
+  function startRename() {
+    if (state.view !== 'detail' || state.renaming || state.confirming) return;
+    const server = currentServer();
+    if (!server) return;
+    state.renaming = true;
+    hideDetailError();
+    el.titleInput.value = server.name;
+    el.title.hidden = true;
+    el.titleInput.hidden = false;
+    el.titleInput.focus();
+    el.titleInput.select();
+  }
+
+  // `state.renaming` goes first: hiding the focused input fires its blur, which must not save.
+  function endRename() {
+    state.renaming = false;
+    el.titleInput.hidden = true;
+    el.title.hidden = false;
+  }
+
+  async function commitRename() {
+    if (!state.renaming) return;
+    const address = state.detail;
+    const server = currentServer();
+    const name = el.titleInput.value;
+    endRename();
+    if (!server || name.trim() === server.name) return;
+    let reply;
+    try {
+      reply = await renameServer(address, name);
+    } catch (error) {
+      reply = { ok: false, message: 'No se pudo guardar el nombre' };
+    }
+    if (reply.ok) {
+      hideDetailError();
+      if (state.detail === address && !state.renaming) el.title.textContent = reply.name;
+    } else {
+      showDetailError(reply.message);
+    }
+  }
+
+  async function renameServer(address, name) {
+    const api = bridge();
+    if (api) return api.rename_server(address, name);
+    if (window.__MCW_PREVIEW__) return previewRename(address, name);
+    throw new Error('sin conexión con la app');
+  }
+
+  // Preview only: a name containing "fail" simulates a config that cannot be written.
+  async function previewRename(address, name) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    if (/fail/i.test(name)) return { ok: false, field: 'name', message: 'No se pudo guardar el archivo' };
+    const normalized = name.trim() || address;
+    const servers = state.payload.servers.map((s) => (
+      s.address === address ? { ...s, name: normalized } : s));
+    render({ ...state.payload, servers });
+    return { ok: true, name: normalized };
+  }
+
+  // --- Delete --------------------------------------------------------------
+
+  function openConfirm() {
+    const server = currentServer();
+    if (state.view !== 'detail' || state.confirming || !server) return;
+    if (state.renaming) endRename();
+    state.confirming = true;
+    el.confirmMsg.textContent = `¿Eliminar "${server.name}"?`;
+    el.confirmErr.hidden = true;
+    el.confirm.hidden = false;
+    scheduleHeight();
+    el.confirmCancel.focus();
+  }
+
+  function closeConfirm() {
+    if (state.deleting) return;
+    state.confirming = false;
+    el.confirm.hidden = true;
+    scheduleHeight();
+  }
+
+  function setDeleting(on) {
+    state.deleting = on;
+    el.confirmCancel.disabled = on;
+    el.confirmOk.disabled = on;
+    el.confirmOk.textContent = on ? 'Eliminando…' : 'Eliminar';
+  }
+
+  async function confirmDelete() {
+    if (state.deleting) return;
+    const address = state.detail;
+    el.confirmErr.hidden = true;
+    setDeleting(true);
+    let reply;
+    try {
+      reply = await removeServer(address);
+    } catch (error) {
+      reply = { ok: false, message: 'No se pudo eliminar el servidor' };
+    }
+    setDeleting(false);
+    if (reply.ok) {
+      leaveDetail();
+    } else {
+      el.confirmErr.textContent = reply.message;
+      el.confirmErr.hidden = false;
+      scheduleHeight();
+    }
+  }
+
+  async function removeServer(address) {
+    const api = bridge();
+    if (api) return api.remove_server(address);
+    if (window.__MCW_PREVIEW__) return previewRemove(address);
+    throw new Error('sin conexión con la app');
+  }
+
+  // Preview only: an address containing "readonly" simulates a config that cannot be written.
+  async function previewRemove(address) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    if (/readonly/i.test(address)) {
+      return { ok: false, field: null, message: 'No se pudo guardar el archivo' };
+    }
+    render({
+      ...state.payload,
+      servers: state.payload.servers.filter((s) => s.address !== address),
+    });
+    return { ok: true };
+  }
+
+  // --- Escape --------------------------------------------------------------
+
+  // One level at a time: rename, confirmation, form or detail, and only then the panel.
+  function onEscape() {
+    if (state.renaming) endRename();
+    else if (state.confirming) closeConfirm();
+    else if (state.view === 'form' && !state.busy) closeForm();
+    else if (state.view === 'detail') leaveDetail();
+    else hide();
   }
 
   // --- Preview and startup -------------------------------------------------
@@ -363,17 +738,40 @@
 
   el.refresh.addEventListener('click', refresh);
   el.add.addEventListener('click', openForm);
-  el.back.addEventListener('click', closeForm);
+  el.back.addEventListener('click', goBack);
   el.cancel.addEventListener('click', closeForm);
   el.form.addEventListener('submit', submitForm);
   el.pin.addEventListener('click', togglePin);
   el.close.addEventListener('click', hide);
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-      // In the form, Escape goes back to the list; hiding the panel there would lose the context.
-      if (state.view === 'form' && !state.busy) closeForm();
-      else hide();
+  el.servers.addEventListener('click', onRowActivate);
+  el.servers.addEventListener('keydown', (event) => {
+    if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('.server')) {
+      event.preventDefault();
+      onRowActivate(event);
     }
+  });
+  el.title.addEventListener('click', startRename);
+  el.title.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      startRename();
+    }
+  });
+  el.titleInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commitRename();
+    } else if (event.key === 'Escape') {
+      event.stopPropagation(); // cancel the rename only: the detail stays open
+      endRename();
+    }
+  });
+  el.titleInput.addEventListener('blur', commitRename);
+  el.del.addEventListener('click', openConfirm);
+  el.confirmCancel.addEventListener('click', closeConfirm);
+  el.confirmOk.addEventListener('click', confirmDelete);
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') onEscape();
     if (event.key === 'Tab') document.body.classList.add('kbd');
   });
   document.addEventListener('pointerdown', () => document.body.classList.remove('kbd'));
