@@ -1,0 +1,37 @@
+[project]
+name = "mc-watch"
+version = "0.1.0"
+description = "Monitor de servidores de Minecraft en la bandeja de Windows"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "mcstatus>=14,<15",
+    "pystray",
+    "pywebview",
+    "Pillow",
+]
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "pyright",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mc_watch"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pyright]
+include = ["mc_watch", "tests", "scripts"]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"

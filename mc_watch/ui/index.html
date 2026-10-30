@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>mc-watch</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="app">
+    <header id="header">
+      <h1>mc-watch</h1>
+      <div class="actions">
+        <button id="btn-add" class="icon-btn" type="button" disabled
+                title="Agregar servidor (próximamente)" aria-label="Agregar servidor">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>
+        </button>
+        <button id="btn-pin" class="icon-btn" type="button" aria-pressed="false"
+                title="Fijar panel" aria-label="Fijar panel">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2l4.5 4.5-2 .5-2.5 2.5.5 3-1 1L6 10l-3.5 3.5L2 13l3.5-3.5L2.5 6.5l1-1 3 .5L9 3.5z"/></svg>
+        </button>
+        <button id="btn-close" class="icon-btn" type="button"
+                title="Cerrar (Esc)" aria-label="Cerrar panel">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <h2 id="section-title">Servidores</h2>
+
+    <div id="list" aria-live="polite">
+      <ul id="servers"></ul>
+      <div id="empty" hidden>
+        <p>No hay servidores configurados.</p>
+        <p class="hint">Agrégalos en el archivo de configuración:</p>
+        <code id="config-path"></code>
+      </div>
+    </div>
+
+    <footer id="footer">
+      <span id="updated">Actualizando…</span>
+      <span id="version"></span>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
