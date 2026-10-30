@@ -9,10 +9,17 @@ class State(Enum):
     ERROR = "error"
 
 
+class Edition(Enum):
+    JAVA = "java"
+    BEDROCK = "bedrock"
+    UNKNOWN = "unknown"
+
+
 @dataclass(frozen=True)
 class ServerConfig:
     name: str
     address: str
+    edition: Edition = Edition.UNKNOWN
 
 
 @dataclass(frozen=True)
@@ -20,6 +27,7 @@ class ProbeOk:
     online: int
     max: int
     latency_ms: float
+    edition: Edition = Edition.JAVA
 
 
 @dataclass(frozen=True)

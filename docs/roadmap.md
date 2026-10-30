@@ -38,6 +38,7 @@ Monitor de servidores de Minecraft en la bandeja de Windows, pensado para jugado
 - `full` cuando Query responde o cuando `len(sample) == online`. `partial` cuando la muestra es menor que online. `hidden` cuando no hay muestra o el servidor es Bedrock.
 - Renombrar inline (click en el nombre) y eliminar con confirmación.
 - Spike: render del MOTD a HTML (verificar qué ofrece `Motd` en mcstatus 14).
+- Servidores "dormidos" (Aternos y similares): su proxy responde al ping aunque el servidor esté apagado, con un MOTD o una versión tipo "Offline" y 0 jugadores, y hoy `mc-watch` los marca online. Con el MOTD y la versión ya leídos, decidir si esa respuesta cuenta como offline y reflejarlo en el estado. Primero capturar con `probe_once` qué devuelve un servidor de Aternos apagado y encendido.
 - **Prueba:** un servidor pequeño muestra nombres, uno grande muestra "12 de N" y uno Bedrock muestra "no comparte". Renombrar y eliminar persisten.
 
 ## 4. `notifications`: enterarme sin abrir el panel

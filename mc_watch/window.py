@@ -94,10 +94,23 @@ class _Api:
     def resize(self, height: float) -> None:
         self._panel.resize(height)
 
+    def add_server(self, name: str, address: str) -> Payload:
+        return self._panel.add_server(name, address)
+
+    def refresh(self) -> None:
+        self._panel.refresh()
+
 
 class Panel:
-    def __init__(self, get_payload: Callable[[], Payload]) -> None:
+    def __init__(
+        self,
+        get_payload: Callable[[], Payload],
+        add_server: Callable[[str, str], Payload] | None = None,
+        refresh: Callable[[], None] | None = None,
+    ) -> None:
         self.get_payload = get_payload
+        self._add_server = add_server
+        self._refresh = refresh
         self._lock = threading.RLock()
         self._guard = ReopenGuard()
         self._pinned = False
@@ -207,6 +220,17 @@ class Panel:
                 return
             self._height = clamped
             self._place()
+
+    def add_server(self, name: str, address: str) -> Payload:
+        """Called from the page; blocks until the server is detected and saved."""
+        if self._add_server is None:
+            return {"ok": False, "field": None, "message": "No se pueden agregar servidores"}
+        return self._add_server(name, address)
+
+    def refresh(self) -> None:
+        """Called from the page: poll every server now."""
+        if self._refresh is not None:
+            self._refresh()
 
     def push(self, payload: Payload) -> None:
         """Send fresh data to the page. Safe to call from any thread."""

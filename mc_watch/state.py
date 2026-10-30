@@ -1,6 +1,7 @@
 from dataclasses import replace
 
 from mc_watch.models import (
+    Edition,
     ProbeOk,
     ProbeResult,
     ProbeUnresolvable,
@@ -19,7 +20,18 @@ def initial_status(server: ServerConfig) -> ServerStatus:
 def next_status(prev: ServerStatus, result: ProbeResult) -> ServerStatus:
     """Fold one probe result into the previous status. Pure: no I/O."""
     if isinstance(result, ProbeOk):
-        return replace(prev, state=State.ONLINE, online=result.online, max=result.max, failures=0)
+        server = prev.server
+        # A server of unknown edition gets pinned to whichever protocol answered.
+        if server.edition is Edition.UNKNOWN:
+            server = replace(server, edition=result.edition)
+        return replace(
+            prev,
+            server=server,
+            state=State.ONLINE,
+            online=result.online,
+            max=result.max,
+            failures=0,
+        )
 
     if isinstance(result, ProbeUnresolvable):
         return replace(prev, state=State.ERROR, online=None, max=None, failures=0)

@@ -9,10 +9,20 @@
 <body>
   <main class="panel" id="app">
     <header class="hd" id="header">
-      <h1>MC Watch</h1>
+      <div class="title">
+        <button id="btn-back" type="button" hidden
+                title="Volver (Esc)" aria-label="Volver a la lista">
+          <i class="ic" aria-hidden="true">&#xE72B;</i>
+        </button>
+        <h1 id="title">MC Watch</h1>
+      </div>
       <div class="actions">
-        <button id="btn-add" type="button" disabled
-                title="Agregar servidor (próximamente)" aria-label="Agregar servidor">
+        <button id="btn-refresh" type="button"
+                title="Actualizar ahora" aria-label="Actualizar ahora">
+          <i class="ic" aria-hidden="true">&#xE72C;</i>
+        </button>
+        <button id="btn-add" type="button"
+                title="Agregar servidor" aria-label="Agregar servidor">
           <i class="ic" aria-hidden="true">&#xE710;</i>
         </button>
         <button id="btn-pin" type="button" aria-pressed="false"
@@ -31,11 +41,38 @@
     <div id="list" aria-live="polite">
       <ul id="servers"></ul>
       <div id="empty" hidden>
-        <p>No hay servidores configurados.</p>
-        <p class="hint">Agrégalos en el archivo de configuración:</p>
-        <code id="config-path"></code>
+        <p id="empty-msg">No hay servidores configurados.</p>
+        <p class="hint" id="empty-hint">Usa el botón + para agregar uno.</p>
+        <code id="config-path" hidden></code>
       </div>
     </div>
+
+    <form id="add-form" novalidate autocomplete="off" hidden>
+      <div class="notice" id="form-notice" hidden>
+        <p>El archivo de configuración tiene un error de sintaxis. Corrígelo para poder agregar servidores:</p>
+        <code id="notice-path"></code>
+      </div>
+
+      <label class="field" for="f-name">
+        <span class="label">Nombre</span>
+        <input id="f-name" type="text" maxlength="40" placeholder="Opcional" spellcheck="false">
+        <span class="err" id="err-name" role="alert" hidden></span>
+      </label>
+
+      <label class="field" for="f-address">
+        <span class="label">Dirección</span>
+        <input id="f-address" type="text" placeholder="play.example.com[:puerto]"
+               spellcheck="false" autocapitalize="off">
+        <span class="err" id="err-address" role="alert" hidden></span>
+      </label>
+
+      <p class="err form-err" id="form-msg" role="alert" hidden></p>
+
+      <div class="buttons">
+        <button id="f-cancel" type="button">Cancelar</button>
+        <button id="f-submit" type="submit" class="primary">Agregar</button>
+      </div>
+    </form>
 
     <hr>
     <footer class="ft" id="footer">

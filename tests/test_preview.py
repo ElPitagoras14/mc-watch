@@ -32,6 +32,17 @@ class PreviewTest(unittest.TestCase):
         self.assertIsNone(by_label["Antes del 1er ciclo"]["updated_at"])
         self.assertGreater(len(by_label["Muchos (scroll)"]["servers"]), 8)
 
+    def test_scenarios_cover_the_editions_and_the_broken_config(self) -> None:
+        data = scenarios(NOW)
+        by_label = {item["label"]: item["payload"] for item in data}
+
+        editions = {s["edition"] for s in by_label["Cuatro estados"]["servers"]}
+        self.assertEqual(editions, {"java", "bedrock", "unknown"})
+        broken = by_label["Config con error"]
+        self.assertEqual(broken["servers"], [])
+        self.assertIsNotNone(broken["config_error"])
+        self.assertIsNone(by_label["Vacío"]["config_error"])
+
     def test_builds_a_self_contained_page(self) -> None:
         index = build_preview(self.directory, now=NOW)
 
@@ -40,7 +51,7 @@ class PreviewTest(unittest.TestCase):
             self.assertTrue((self.directory / name).exists(), name)
         html = index.read_text(encoding="utf-8")
         self.assertLess(html.index("__MCW_PREVIEW__"), html.index('src="app.js"'))
-        self.assertEqual(len(extract_data(html)), 4)
+        self.assertEqual(len(extract_data(html)), 5)
 
     def test_does_not_modify_the_real_ui(self) -> None:
         from mc_watch.preview import UI_DIR

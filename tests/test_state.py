@@ -1,6 +1,7 @@
 import unittest
 
 from mc_watch.models import (
+    Edition,
     ProbeOk,
     ProbeUnreachable,
     ProbeUnresolvable,
@@ -90,7 +91,28 @@ class NextStatusTest(unittest.TestCase):
         self.assertEqual(next_status(first_failure, FAIL).state, State.OFFLINE)
 
     def test_server_is_preserved(self) -> None:
-        self.assertEqual(next_status(initial_status(SERVER), OK).server, SERVER)
+        server = next_status(initial_status(SERVER), OK).server
+        self.assertEqual((server.name, server.address), (SERVER.name, SERVER.address))
+
+    def test_unknown_edition_is_pinned_to_java(self) -> None:
+        status = next_status(initial_status(SERVER), OK)
+        self.assertEqual(status.server.edition, Edition.JAVA)
+
+    def test_unknown_edition_is_pinned_to_bedrock(self) -> None:
+        bedrock = ProbeOk(online=1, max=10, latency_ms=30.0, edition=Edition.BEDROCK)
+        status = next_status(initial_status(SERVER), bedrock)
+        self.assertEqual(status.server.edition, Edition.BEDROCK)
+        self.assertEqual(status.server.address, SERVER.address)
+
+    def test_failure_does_not_touch_the_edition(self) -> None:
+        self.assertEqual(next_status(initial_status(SERVER), FAIL).server.edition, Edition.UNKNOWN)
+        self.assertEqual(next_status(initial_status(SERVER), DNS).server.edition, Edition.UNKNOWN)
+
+    def test_known_edition_never_changes(self) -> None:
+        java = ServerConfig("Survival", "play.example.com", Edition.JAVA)
+        bedrock = ProbeOk(online=1, max=10, latency_ms=30.0, edition=Edition.BEDROCK)
+        status = next_status(initial_status(java), bedrock)
+        self.assertEqual(status.server.edition, Edition.JAVA)
 
 
 if __name__ == "__main__":

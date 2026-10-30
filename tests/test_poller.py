@@ -4,6 +4,7 @@ import time
 import unittest
 
 from mc_watch.models import (
+    Edition,
     ProbeOk,
     ProbeResult,
     ProbeUnreachable,
@@ -200,6 +201,176 @@ class PollerTest(unittest.TestCase):
         self.assertTrue(collector.wait_for(1))
         self.assertEqual(collector.snapshots[0].servers, ())
         self.assertIsNotNone(collector.snapshots[0].updated_at)
+
+
+class PollerAddTest(unittest.TestCase):
+    def make(self, poller: Poller) -> Poller:
+        self.addCleanup(poller.stop)
+        return poller
+
+    def test_add_publishes_the_new_row_without_resetting_the_age(self) -> None:
+        poller = self.make(Poller([A], 3600, always_ok))
+        collector = Collector()
+        poller.subscribe(collector)
+        poller.start()
+        self.assertTrue(collector.wait_for(1))
+
+        poller.add(B, ProbeOk(online=4, max=20, latency_ms=5.0))
+
+        self.assertTrue(collector.wait_for(2))
+        added = collector.snapshots[1]
+        self.assertEqual([s.server.name for s in added.servers], ["A", "B"])
+        self.assertEqual(added.servers[1].state, State.ONLINE)
+        self.assertEqual((added.servers[1].online, added.servers[1].max), (4, 20))
+        self.assertEqual(added.updated_at, collector.snapshots[0].updated_at)
+        self.assertEqual(poller.snapshot(), added)
+
+    def test_add_pins_the_detected_edition(self) -> None:
+        poller = self.make(Poller([], 3600, always_ok))
+        poller.start()
+
+        poller.add(A, ProbeOk(online=1, max=10, latency_ms=5.0, edition=Edition.BEDROCK))
+
+        self.assertEqual(poller.snapshot().servers[0].server.edition, Edition.BEDROCK)
+
+    def test_add_with_unreachable_result_starts_with_one_failure(self) -> None:
+        poller = self.make(Poller([], 3600, always_ok))
+        poller.start()
+
+        poller.add(A, ProbeUnreachable())
+
+        status = poller.snapshot().servers[0]
+        self.assertEqual((status.state, status.failures), (State.QUERYING, 1))
+        self.assertEqual(status.server.edition, Edition.UNKNOWN)
+
+    def test_added_server_is_probed_in_the_next_cycle(self) -> None:
+        probed: set[str] = set()
+
+        async def recording(server: ServerConfig) -> ProbeResult:
+            probed.add(server.name)
+            return OK
+
+        poller = self.make(Poller([A], 0.05, recording))
+        collector = Collector()
+        poller.subscribe(collector)
+        poller.start()
+        self.assertTrue(collector.wait_for(1))
+
+        poller.add(B, OK)
+        count = len(collector.snapshots)
+        self.assertTrue(collector.wait_for(count + 2))
+
+        self.assertEqual(probed, {"A", "B"})
+
+    def test_server_added_during_a_cycle_is_not_lost(self) -> None:
+        async def slow(_: ServerConfig) -> ProbeResult:
+            await asyncio.sleep(0.3)
+            return OK
+
+        poller = self.make(Poller([A], 3600, slow))
+        collector = Collector()
+        poller.subscribe(collector)
+        poller.start()
+        time.sleep(0.1)  # the first cycle is in flight
+
+        poller.add(B, OK)
+        self.assertTrue(collector.wait_for(2))
+
+        final = collector.snapshots[-1]
+        self.assertIsNotNone(final.updated_at, "el segundo snapshot cierra el ciclo")
+        self.assertEqual([s.server.name for s in final.servers], ["A", "B"])
+        self.assertEqual([s.state for s in final.servers], [State.ONLINE, State.ONLINE])
+
+    def test_submit_runs_a_coroutine_on_the_poller_loop(self) -> None:
+        poller = self.make(Poller([], 3600, always_ok))
+        poller.start()
+
+        async def where() -> str:
+            return threading.current_thread().name
+
+        self.assertEqual(poller.submit(where()).result(timeout=2), "poller")
+
+    def test_submit_and_add_require_a_running_poller(self) -> None:
+        poller = Poller([], 3600, always_ok)
+
+        async def noop() -> None: ...
+
+        with self.assertRaises(RuntimeError):
+            poller.submit(noop())
+        with self.assertRaises(RuntimeError):
+            poller.add(A, OK)
+
+
+class PollerRefreshTest(unittest.TestCase):
+    def make(self, poller: Poller) -> Poller:
+        self.addCleanup(poller.stop)
+        return poller
+
+    def test_refresh_runs_a_cycle_right_away(self) -> None:
+        poller = self.make(Poller([A], 3600, always_ok))
+        collector = Collector()
+        poller.subscribe(collector)
+        poller.start()
+        self.assertTrue(collector.wait_for(1))
+
+        started = time.monotonic()
+        poller.refresh()
+
+        self.assertTrue(collector.wait_for(2, timeout=2))
+        self.assertLess(time.monotonic() - started, 1)
+
+    def test_refresh_during_a_cycle_is_ignored(self) -> None:
+        async def slow(_: ServerConfig) -> ProbeResult:
+            await asyncio.sleep(0.3)
+            return OK
+
+        poller = self.make(Poller([A], 3600, slow))
+        collector = Collector()
+        poller.subscribe(collector)
+        poller.start()
+        time.sleep(0.1)  # the first cycle is in flight
+
+        poller.refresh()
+        self.assertTrue(collector.wait_for(1))
+        time.sleep(0.5)
+
+        self.assertEqual(len(collector.snapshots), 1)
+
+    def test_next_periodic_cycle_counts_from_the_manual_one(self) -> None:
+        starts: list[float] = []
+
+        async def timed(_: ServerConfig) -> ProbeResult:
+            starts.append(time.monotonic())
+            return OK
+
+        poller = self.make(Poller([A], 0.5, timed))
+        collector = Collector()
+        poller.subscribe(collector)
+        poller.start()
+        self.assertTrue(collector.wait_for(1))
+        time.sleep(0.2)
+        poller.refresh()
+        self.assertTrue(collector.wait_for(3, timeout=3))
+
+        manual_to_next = starts[2] - starts[1]
+        # Counting from the first cycle it would be ~0.3 s.
+        self.assertGreater(manual_to_next, 0.45)
+
+    def test_refresh_without_a_running_poller_is_a_noop(self) -> None:
+        Poller([A], 1, always_ok).refresh()
+
+    def test_stop_still_interrupts_the_wait(self) -> None:
+        poller = self.make(Poller([A], 3600, always_ok))
+        collector = Collector()
+        poller.subscribe(collector)
+        poller.start()
+        self.assertTrue(collector.wait_for(1))
+
+        started = time.monotonic()
+        poller.stop()
+
+        self.assertLess(time.monotonic() - started, 2)
+        self.assertFalse(poller.is_running)
 
 
 if __name__ == "__main__":
