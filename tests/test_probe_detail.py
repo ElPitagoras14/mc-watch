@@ -44,6 +44,17 @@ class AsleepTest(unittest.IsolatedAsyncioTestCase):
         patch_java(self, mock.AsyncMock(return_value=asleep))
         self.assertEqual(await probe_module.probe(SERVER), ProbeAsleep())
 
+    async def test_lazymc_sleeping_and_starting_are_asleep(self) -> None:
+        # lazymc keeps the real version and protocol; only the MOTD gives it away.
+        for motd in (
+            "☠ Server is sleeping\n§2☻ Join to start it up",
+            "§2☻ Server is starting...\n§7⌛ Please wait...",
+        ):
+            with self.subTest(motd=motd):
+                status = response(0, 0, protocol=777, version="26.3", motd=motd)
+                patch_java(self, mock.AsyncMock(return_value=status))
+                self.assertEqual(await probe_module.probe(SERVER), ProbeAsleep())
+
     async def test_protocol_minus_one_without_keyword_is_online(self) -> None:
         patch_java(
             self,

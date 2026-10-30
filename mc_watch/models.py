@@ -81,7 +81,7 @@ class ProbeUnresolvable:
 
 @dataclass(frozen=True)
 class ProbeAsleep:
-    """A Java proxy answered, but the server behind it is switched off (Aternos and similar)."""
+    """A Java proxy answered, but the server behind it is off (Aternos, lazymc and similar)."""
 
     edition: Edition = Edition.JAVA
 
