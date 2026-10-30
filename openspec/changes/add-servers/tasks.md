@@ -29,7 +29,7 @@
 
 ## 5. VerificaciÃ³n final
 
-- [ ] 5.1 Prueba de punta a punta con `MC_WATCH_CONFIG_DIR=local/demo` y la app real: agregar un servidor Java (`mc.hypixel.net` ya estÃ¡, usar otro) y uno Bedrock, y verificar que aparecen al instante, que el icono suma, que `config.toml` conserva lo existente y suma las entradas, y que tras reiniciar ambos siguen con su ediciÃ³n
-- [ ] 5.2 Con la app real, verificar los casos de error: `no-existe.invalid` muestra "No se encontrÃ³ el host" y no se guarda; un duplicado se rechaza; una entrada del toml sin `edition` queda con `edition = "java"` tras el primer ciclo; con `config.toml` roto a mano, el estado vacÃ­o y el formulario muestran el aviso y el archivo no cambia
-- [ ] 5.3 Verificar que el panel se oculta al perder el foco con el formulario a medias y que, al reabrirlo, conserva lo escrito
+- [x] 5.1 Prueba de punta a punta con `MC_WATCH_CONFIG_DIR=local/demo` y la app real: agregar un servidor Java (`mc.hypixel.net` ya estÃ¡, usar otro) y uno Bedrock, y verificar que aparecen al instante, que el icono suma, que `config.toml` conserva lo existente y suma las entradas, y que tras reiniciar ambos siguen con su ediciÃ³n
+- [x] 5.2 Con la app real, verificar los casos de error: `no-existe.invalid` muestra "No se encontrÃ³ el host" y no se guarda; un duplicado se rechaza; una entrada del toml sin `edition` queda con `edition = "java"` tras el primer ciclo; con `config.toml` roto a mano, el estado vacÃ­o y el formulario muestran el aviso y el archivo no cambia
+- [x] 5.3 Verificar que el panel se oculta al perder el foco con el formulario a medias y que, al reabrirlo, conserva lo escrito
 - [x] 5.4 Ejecutar `uv run python -m unittest`, `uv run ruff check`, `uv run ruff format --check` y `uv run pyright`, y verificar que pasan en limpio
