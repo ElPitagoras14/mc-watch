@@ -1,0 +1,17 @@
+# Notas locales (no versionadas)
+local/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Build
+build/
+dist/
+*.spec
+
+# Entorno
+.env
