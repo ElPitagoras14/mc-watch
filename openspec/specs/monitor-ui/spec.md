@@ -7,11 +7,11 @@ Definir el panel principal de `mc-watch`: la lista de servidores con su estado y
 ## Requirements
 
 ### Requirement: Lista de servidores
-El panel SHALL mostrar una fila por servidor configurado con su nombre, su dirección tal como está en la configuración, su estado (Consultando, Online, Offline o Error) con un indicador de color, y sus jugadores en formato `X/Y`. Cuando el servidor no está online, la columna de jugadores SHALL mostrar `—`. Junto a la dirección, la fila de un servidor Bedrock SHALL indicar "Bedrock" y la de un servidor de edición desconocida SHALL mostrar el aviso "edición desconocida". La fila de un servidor Java SHALL NOT llevar indicación de edición. Cada fila SHALL ser interactiva: SHALL mostrar un estado al pasar el puntero y al recibir el foco del teclado, y SHALL abrir el detalle del servidor.
+El panel SHALL mostrar una fila por servidor configurado con su nombre, su dirección tal como está en la configuración, su estado (Consultando, Online, Offline o Error) con un indicador de color, y sus jugadores en formato `X/Y`. Cuando el servidor no está online, la columna de jugadores SHALL mostrar `—`. Junto a la dirección, la fila SHALL indicar la edición del servidor: "Java", "Bedrock" o, si no se ha detectado, el aviso "edición desconocida". Cada fila SHALL ser interactiva: SHALL mostrar un estado al pasar el puntero y al recibir el foco del teclado, y SHALL abrir el detalle del servidor.
 
 #### Scenario: Servidor online
 - **WHEN** el servidor "Survival" en `play.example.com` está online con 3 de 20 jugadores
-- **THEN** su fila muestra "Survival", "play.example.com", estado Online y "3/20"
+- **THEN** su fila muestra "Survival", "play.example.com", "Java", estado Online y "3/20"
 
 #### Scenario: Servidor offline
 - **WHEN** un servidor está offline
@@ -20,6 +20,10 @@ El panel SHALL mostrar una fila por servidor configurado con su nombre, su direc
 #### Scenario: Estado distinguible
 - **WHEN** hay servidores en los cuatro estados
 - **THEN** cada estado se muestra con su propio texto y color de indicador
+
+#### Scenario: Servidor Java
+- **WHEN** un servidor es de edición Java, esté online o no
+- **THEN** su fila muestra "Java" junto a la dirección
 
 #### Scenario: Servidor Bedrock
 - **WHEN** un servidor es de edición Bedrock
