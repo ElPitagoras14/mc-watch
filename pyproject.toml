@@ -10,6 +10,7 @@ dependencies = [
     "pywebview",
     "Pillow",
     "tomlkit>=0.15.2",
+    "desktop-notifier==6.2.0",
 ]
 
 [dependency-groups]

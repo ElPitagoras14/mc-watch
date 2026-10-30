@@ -75,6 +75,23 @@ class LoadConfigTest(unittest.TestCase):
         self.assertEqual(config.poll_interval_secs, DEFAULT_POLL_INTERVAL_SECS)
         self.assertTrue(config.warnings)
 
+    def test_high_interval_is_lowered_to_maximum(self) -> None:
+        self.write("poll_interval_secs = 86400\n")
+        self.assertEqual(load_config(self.directory).poll_interval_secs, 3600)
+
+    def test_settings_default_when_absent(self) -> None:
+        self.write('[[servers]]\nname = "A"\naddress = "a.example.com"\n')
+        config = load_config(self.directory)
+        self.assertFalse(config.notifications)
+        self.assertEqual(config.max_visible_servers, 8)
+
+    def test_invalid_settings_fall_back(self) -> None:
+        self.write('notifications = "sí"\nmax_visible_servers = 50\n')
+        config = load_config(self.directory)
+        self.assertFalse(config.notifications)
+        self.assertEqual(config.max_visible_servers, 20)
+        self.assertEqual(len(config.warnings), 2)
+
     def test_missing_file_starts_without_servers(self) -> None:
         config = load_config(self.directory)
         self.assertEqual(config.servers, ())

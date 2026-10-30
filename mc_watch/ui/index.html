@@ -27,6 +27,10 @@
                 title="Agregar servidor" aria-label="Agregar servidor">
           <i class="ic" aria-hidden="true">&#xE710;</i>
         </button>
+        <button id="btn-settings" type="button"
+                title="Ajustes" aria-label="Ajustes" aria-haspopup="dialog">
+          <i class="ic" aria-hidden="true">&#xE713;</i>
+        </button>
         <button id="btn-delete" class="danger" type="button" hidden
                 title="Eliminar servidor" aria-label="Eliminar servidor">
           <i class="ic" aria-hidden="true">&#xE74D;</i>
@@ -117,6 +121,51 @@
       <span id="updated">Actualizando…</span>
       <span id="version"></span>
     </footer>
+
+    <div class="overlay" id="settings" hidden>
+      <form class="dialog" id="settings-form" role="dialog" aria-modal="true"
+            aria-labelledby="settings-title" novalidate autocomplete="off">
+        <h2 id="settings-title">Ajustes</h2>
+
+        <div class="notice" id="s-notice" hidden>
+          <p>El archivo de configuración tiene un error de sintaxis. Corrígelo para poder guardar:</p>
+          <code id="s-notice-path"></code>
+        </div>
+
+        <label class="setting" for="s-notifications">
+          <span class="text">
+            <span>Notificaciones</span>
+            <span class="hint">Quién entra y qué servidores se caen</span>
+          </span>
+          <input id="s-notifications" type="checkbox" role="switch">
+        </label>
+
+        <label class="setting" for="s-interval">
+          <span class="text">
+            <span>Segundos entre consultas</span>
+            <span class="hint">De 30 a 3600</span>
+          </span>
+          <input id="s-interval" type="number" min="30" max="3600" step="1" inputmode="numeric">
+        </label>
+        <span class="err" id="err-interval" role="alert" hidden></span>
+
+        <label class="setting" for="s-visible">
+          <span class="text">
+            <span>Servidores visibles</span>
+            <span class="hint">Filas antes de hacer scroll, de 3 a 20</span>
+          </span>
+          <input id="s-visible" type="number" min="3" max="20" step="1" inputmode="numeric">
+        </label>
+        <span class="err" id="err-visible" role="alert" hidden></span>
+
+        <p class="err form-err" id="settings-msg" role="alert" hidden></p>
+
+        <div class="buttons">
+          <button id="s-cancel" type="button">Cancelar</button>
+          <button id="s-save" type="submit" class="primary">Guardar</button>
+        </div>
+      </form>
+    </div>
   </main>
 
   <script src="app.js"></script>

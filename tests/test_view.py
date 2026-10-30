@@ -49,6 +49,11 @@ class SnapshotPayloadTest(unittest.TestCase):
                 "config_path": r"C:\cfg\config.toml",
                 "config_error": None,
                 "version": "0.1.0",
+                "settings": {
+                    "notifications": False,
+                    "poll_interval_secs": 60,
+                    "max_visible_servers": 8,
+                },
             },
         )
 

@@ -3,6 +3,7 @@
 from dataclasses import asdict
 from typing import Any
 
+from mc_watch.config import Settings
 from mc_watch.models import ServerStatus, Snapshot
 
 
@@ -31,6 +32,7 @@ def snapshot_payload(
     config_path: str,
     version: str,
     config_error: str | None = None,
+    settings: Settings | None = None,
 ) -> dict[str, Any]:
     return {
         "servers": [_server_payload(status) for status in snapshot.servers],
@@ -38,4 +40,5 @@ def snapshot_payload(
         "config_path": config_path,
         "config_error": config_error,
         "version": version,
+        "settings": asdict(settings or Settings()),
     }

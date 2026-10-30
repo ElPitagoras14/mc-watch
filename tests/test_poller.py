@@ -431,6 +431,32 @@ class PollerRefreshTest(unittest.TestCase):
         # Counting from the first cycle it would be ~0.3 s.
         self.assertGreater(manual_to_next, 0.45)
 
+    def test_shorter_interval_cycles_right_away_when_already_due(self) -> None:
+        poller = self.make(Poller([A], 3600, always_ok))
+        collector = Collector()
+        poller.subscribe(collector)
+        poller.start()
+        self.assertTrue(collector.wait_for(1))
+        time.sleep(0.3)
+
+        started = time.monotonic()
+        poller.set_interval(0.2)
+
+        self.assertTrue(collector.wait_for(2, timeout=2))
+        self.assertLess(time.monotonic() - started, 0.15)
+
+    def test_longer_interval_does_not_cycle_early(self) -> None:
+        poller = self.make(Poller([A], 0.4, always_ok))
+        collector = Collector()
+        poller.subscribe(collector)
+        poller.start()
+        self.assertTrue(collector.wait_for(1))
+
+        poller.set_interval(3600)
+        time.sleep(0.8)
+
+        self.assertEqual(len(collector.snapshots), 1)
+
     def test_refresh_without_a_running_poller_is_a_noop(self) -> None:
         Poller([A], 1, always_ok).refresh()
 
