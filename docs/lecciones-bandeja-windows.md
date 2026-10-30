@@ -4,7 +4,7 @@ Problemas de pystray y pywebview en Windows que ya se resolvieron en proyectos h
 
 ## Menú del clic derecho sin resaltado (pr-watch v0.1.4, PR #15)
 
-**Estado en mc-watch:** no aplicado. `mc_watch/tray.py` usa el `_on_notify` de pystray sin cambios, así que probablemente sufre el mismo problema al lanzarse desde el Explorador.
+**Estado en mc-watch:** aplicado en el change `distribution`. `mc_watch/tray.py` sobrescribe `_on_notify` (`_WindowsIcon`) y fuerza el primer plano sobre `_menu_hwnd`, igual que pr-watch.
 
 ### Síntoma
 
@@ -34,9 +34,12 @@ El usuario lo verificó con el binario descargado del release v0.1.4 de pr-watch
 
 - Registrar en el log `fg_antes`, `fg_despues` y `menu_hwnd` comparándolos con `GetForegroundWindow()`.
 - Probar siempre lanzando la app con doble clic desde el Explorador, no desde una terminal.
+- Si el primer plano es correcto y el menú sigue sin resaltar, el culpable es el DPI (sección siguiente).
 
-## Pista relacionada (no aplicada en ningún proyecto)
+## DPI alto: Per-Monitor-V2 (aplicado en mc-watch)
 
-El repositorio `jens-duttke/usage-monitor-for-claude` activa el modo Per-Monitor-V2 (`SetProcessDpiAwarenessContext(-4)`) antes de que pywebview llame a `SetProcessDPIAware()`. Esa llamada heredada rompe el resaltado nativo de los menús con DPI alto.
+**Estado en mc-watch:** aplicado en el change `distribution` (`winutil.enable_per_monitor_dpi()`, llamado al inicio de `__main__.main()`). Con la escala al 125 % el primer plano ya era correcto (`fg_after == menu_hwnd`) y aun así el menú no resaltaba; activar este modo lo resolvió, y el panel siguió bien colocado.
 
-En pr-watch no hizo falta. Además, cambiar el modo de DPI altera cómo se interpretan las coordenadas, lo que afecta a la colocación del panel (`window.panel_geometry` y `winutil.dpi_scale`).
+El repositorio `jens-duttke/usage-monitor-for-claude` activa el modo Per-Monitor-V2 (`SetProcessDpiAwarenessContext(-4)`) antes de que pywebview llame a `SetProcessDPIAware()`. Esa llamada heredada rompe el resaltado nativo de los menús con DPI alto. En pr-watch no hizo falta.
+
+Cambiar el modo de DPI altera cómo se interpretan las coordenadas, así que tras activarlo hay que comprobar la colocación del panel (`window.panel_geometry` y `winutil.dpi_scale`).

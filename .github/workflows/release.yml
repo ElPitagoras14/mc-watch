@@ -1,0 +1,160 @@
+name: release
+
+# Publishing a version is pushing to main a commit that bumps it: check-version looks for the
+# tag and, if it exists, the pipeline ends there.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Two pushes in a row cannot race for the same tag.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  check-version:
+    name: check-version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.decide.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Standard library only, no uv: this job takes seconds even if the rest never runs.
+      - name: Read the project version
+        id: version
+        run: python3 scripts/release_version.py
+
+      - name: Decide whether there is anything to publish
+        id: decide
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if git ls-remote --tags --exit-code origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "Version $VERSION is already published: nothing to do." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "Publishing version $VERSION." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  verify:
+    name: verify
+    needs: check-version
+    if: needs.check-version.outputs.publish == 'true'
+    # Windows: winreg, ctypes.windll and the single-instance tests need it.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run python -m unittest
+      - run: uv run ruff check
+      - run: uv run ruff format --check
+      - run: uv run pyright
+
+  build:
+    name: build
+    needs: [check-version, verify]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+
+      - name: Build the executable
+        run: uv run build.py
+
+      - name: Check it exists and put the version in its name
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.check-version.outputs.version }}
+        run: |
+          if (-not (Test-Path dist/mc-watch.exe)) { throw "dist/mc-watch.exe was not generated" }
+          Move-Item dist/mc-watch.exe "dist/mc-watch-$env:VERSION-windows.exe"
+          Get-Item "dist/mc-watch-$env:VERSION-windows.exe" | Select-Object Name, Length
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mc-watch-windows
+          path: dist/mc-watch-${{ needs.check-version.outputs.version }}-windows.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  tag:
+    name: tag
+    needs: [check-version, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      # No --force: if another run already created the tag this fails instead of publishing
+      # over what exists.
+      - name: Create and push the tag
+        env:
+          VERSION: ${{ needs.check-version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "mc-watch v$VERSION"
+          git push origin "refs/tags/v$VERSION"
+
+  release:
+    name: release
+    needs: [check-version, tag]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Build the notes
+        env:
+          VERSION: ${{ needs.check-version.outputs.version }}
+        run: |
+          git fetch --tags --force --quiet
+          previous=$(git describe --tags --abbrev=0 "v$VERSION^" 2>/dev/null || true)
+          if [ -n "$previous" ]; then
+            range="$previous..v$VERSION"
+            echo "Cambios desde $previous:" > notes.md
+          else
+            range="v$VERSION"
+            echo "Primera versión publicada." > notes.md
+          fi
+          echo >> notes.md
+          git log --no-merges --pretty=format:'- %s (%h)' "$range" >> notes.md
+          cat >> notes.md <<'END'
+
+
+          ---
+
+          Descarga `mc-watch-<versión>-windows.exe` y ejecútalo. Es portable: no hay instalador ni hace falta Python.
+          END
+          cat notes.md
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check-version.outputs.version }}
+        run: |
+          gh release create "v$VERSION" \
+            --title "v$VERSION" \
+            --notes-file notes.md \
+            "artifacts/mc-watch-$VERSION-windows.exe"
