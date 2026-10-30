@@ -9,6 +9,7 @@ dependencies = [
     "pystray",
     "pywebview",
     "Pillow",
+    "tomlkit>=0.15.2",
 ]
 
 [dependency-groups]

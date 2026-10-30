@@ -14,7 +14,7 @@ from typing import Any
 
 from mc_watch import __version__
 from mc_watch.config import config_path
-from mc_watch.models import ServerConfig, ServerStatus, Snapshot, State
+from mc_watch.models import Edition, ServerConfig, ServerStatus, Snapshot, State
 from mc_watch.view import snapshot_payload
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
@@ -22,18 +22,38 @@ UI_FILES = ("styles.css", "app.js")
 INJECTION_POINT = '<script src="app.js"></script>'
 
 
-def _scenario(label: str, statuses: list[ServerStatus], updated_at: float | None) -> dict[str, Any]:
+def _scenario(
+    label: str,
+    statuses: list[ServerStatus],
+    updated_at: float | None,
+    config_error: str | None = None,
+) -> dict[str, Any]:
     snapshot = Snapshot(servers=tuple(statuses), updated_at=updated_at)
-    payload = snapshot_payload(snapshot, config_path=str(config_path()), version=__version__)
+    payload = snapshot_payload(
+        snapshot,
+        config_path=str(config_path()),
+        version=__version__,
+        config_error=config_error,
+    )
     return {"label": label, "payload": payload}
 
 
 def scenarios(now: float) -> list[dict[str, Any]]:
     mixed = [
-        ServerStatus(ServerConfig("Survival", "play.example.com"), State.ONLINE, 12, 20),
-        ServerStatus(ServerConfig("Creativo", "creativo.example.com:25570"), State.QUERYING),
-        ServerStatus(ServerConfig("Minijuegos", "mini.example.com"), State.OFFLINE),
-        ServerStatus(ServerConfig("Servidor roto", "no-existe.invalid"), State.ERROR),
+        ServerStatus(
+            ServerConfig("Survival", "play.example.com", Edition.JAVA), State.ONLINE, 12, 20
+        ),
+        ServerStatus(
+            ServerConfig("Creativo", "creativo.example.com:25570", Edition.JAVA), State.QUERYING
+        ),
+        ServerStatus(ServerConfig("Minijuegos", "mini.example.com", Edition.JAVA), State.OFFLINE),
+        ServerStatus(
+            ServerConfig("Servidor roto", "no-existe.invalid", Edition.UNKNOWN), State.ERROR
+        ),
+        ServerStatus(
+            ServerConfig("Isla", "isla.example.com", Edition.BEDROCK), State.ONLINE, 3, 10
+        ),
+        ServerStatus(ServerConfig("Recién agregado", "nuevo.example.com"), State.QUERYING),
     ]
     cycle = [State.ONLINE, State.OFFLINE, State.ERROR, State.QUERYING]
     many = [
@@ -53,6 +73,12 @@ def scenarios(now: float) -> list[dict[str, Any]]:
         _scenario("Vacío", [], now - 5),
         _scenario("Muchos (scroll)", many, now - 75),
         _scenario("Antes del 1er ciclo", starting, None),
+        _scenario(
+            "Config con error",
+            [],
+            now - 5,
+            config_error=f"{config_path()} no es un TOML válido: Expected '=' (at line 3)",
+        ),
     ]
 
 
