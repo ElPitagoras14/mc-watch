@@ -40,7 +40,7 @@ Cuando no hay servidores configurados, el panel SHALL mostrar un mensaje que ind
 - **THEN** el panel muestra el mensaje de estado vacío con la ruta de `config.toml`
 
 ### Requirement: Cabecera del panel
-La cabecera SHALL mostrar el nombre `mc-watch` y tres botones: agregar, fijar y cerrar. En este change el botón agregar SHALL mostrarse deshabilitado. El botón fijar SHALL indicar visualmente si el panel está fijado.
+La cabecera SHALL mostrar el nombre `MC Watch` y tres botones: agregar, fijar y cerrar. En este change el botón agregar SHALL mostrarse deshabilitado. El botón fijar SHALL indicar visualmente si el panel está fijado.
 
 #### Scenario: Botón agregar
 - **WHEN** el usuario hace click en agregar

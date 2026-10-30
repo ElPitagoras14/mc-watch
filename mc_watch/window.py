@@ -16,7 +16,7 @@ WINDOW_TITLE = "mc-watch"
 UI_INDEX = Path(__file__).resolve().parent / "ui" / "index.html"
 
 PANEL_WIDTH = 360
-MIN_HEIGHT = 240
+MIN_HEIGHT = 120
 MAX_HEIGHT = 600
 DEFAULT_HEIGHT = 360
 MARGIN = 12
