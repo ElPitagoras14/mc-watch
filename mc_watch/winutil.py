@@ -12,6 +12,7 @@ SPI_GETWORKAREA = 0x0030
 PERSONALIZE_KEY = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
 LIGHT_THEME_VALUE = "SystemUsesLightTheme"
 BASE_DPI = 96
+PER_MONITOR_AWARE_V2 = -4
 
 GWL_EXSTYLE = -20
 WS_EX_TOOLWINDOW = 0x00000080
@@ -71,6 +72,18 @@ def work_area() -> Rect:
     if not ctypes.windll.user32.SystemParametersInfoW(SPI_GETWORKAREA, 0, ctypes.byref(rect), 0):
         raise ctypes.WinError()
     return Rect(rect.left, rect.top, rect.right, rect.bottom)
+
+
+def enable_per_monitor_dpi() -> None:
+    """Per-Monitor-V2 awareness. Call before pywebview creates any window.
+
+    pywebview calls the legacy `SetProcessDPIAware()`, which breaks the native menus' hover
+    highlight on scaled displays. Once the process has an awareness set, that call is a no-op.
+    """
+    try:
+        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(PER_MONITOR_AWARE_V2))
+    except (AttributeError, OSError):
+        log.warning("No se pudo activar Per-Monitor-V2", exc_info=True)
 
 
 def dpi_scale() -> float:

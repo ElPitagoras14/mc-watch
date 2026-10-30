@@ -55,7 +55,8 @@ Monitor de servidores de Minecraft en la bandeja de Windows, pensado para jugado
 
 - `build.py` genera un `.exe` portable.
 - Autostart desde el menú de la bandeja (clave `Run` de HKCU).
-- Workflow de release en GitHub Actions: check-version, build, tag y release.
+- Workflow de release en GitHub Actions: check-version, verify, build, tag y release.
+- Añadido durante el change: una sola instancia por carpeta de configuración (la segunda abre el panel de la primera) y el arreglo del menú del clic derecho al lanzar desde el Explorador (`docs/lecciones-bandeja-windows.md`).
 - **Prueba:** descargar el `.exe` de un release, activar el autostart, reiniciar y ver que arranca solo.
 
 ## Fuera del MVP

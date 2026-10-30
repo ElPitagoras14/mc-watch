@@ -17,6 +17,7 @@ dependencies = [
 dev = [
     "ruff",
     "pyright",
+    "pyinstaller>=6.22.3",
 ]
 
 [build-system]
@@ -35,5 +36,6 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pyright]
 include = ["mc_watch", "tests", "scripts"]
+extraPaths = ["scripts"]
 pythonVersion = "3.13"
 typeCheckingMode = "strict"
