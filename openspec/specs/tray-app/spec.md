@@ -55,7 +55,7 @@ El click izquierdo sobre el icono, o la entrada "Abrir mc-watch", SHALL mostrar 
 - **THEN** el panel se oculta
 
 ### Requirement: Ocultar el panel
-El botón cerrar SHALL ocultar el panel sin terminar la app. La tecla Escape SHALL ocultar el panel cuando muestra la lista de servidores. Cuando muestra el formulario de agregar o el detalle de un servidor, Escape SHALL volver a la lista sin ocultar el panel. Si en el detalle hay un renombrado o una confirmación de eliminación en curso, Escape SHALL cancelar solo eso. Cuando el panel no está fijado, perder el foco SHALL ocultarlo, también con el formulario o el detalle abiertos. Lo escrito en el formulario y la vista abierta SHALL conservarse hasta que el panel vuelva a mostrarse. El sondeo SHALL continuar con el panel oculto.
+El botón cerrar SHALL ocultar el panel sin terminar la app. La tecla Escape SHALL ocultar el panel cuando muestra la lista de servidores. Cuando muestra el formulario de agregar o el detalle de un servidor, Escape SHALL volver a la lista sin ocultar el panel. Si en el detalle hay un renombrado o una confirmación de eliminación en curso, Escape SHALL cancelar solo eso. Con el diálogo de ajustes abierto, Escape SHALL cerrarlo sin guardar y sin ocultar el panel. Cuando el panel no está fijado, perder el foco SHALL ocultarlo, también con el formulario, el detalle o el diálogo de ajustes abiertos. Lo escrito en el formulario o en el diálogo y la vista abierta SHALL conservarse hasta que el panel vuelva a mostrarse. El sondeo SHALL continuar con el panel oculto.
 
 #### Scenario: Botón cerrar
 - **WHEN** el usuario hace click en cerrar
@@ -76,6 +76,10 @@ El botón cerrar SHALL ocultar el panel sin terminar la app. La tecla Escape SHA
 #### Scenario: Escape durante la confirmación
 - **WHEN** la confirmación de eliminar está abierta y el usuario presiona Escape
 - **THEN** la confirmación se cierra y el detalle sigue abierto
+
+#### Scenario: Escape en ajustes
+- **WHEN** el diálogo de ajustes está abierto y el usuario presiona Escape
+- **THEN** el diálogo se cierra sin guardar y el panel sigue mostrando la lista
 
 #### Scenario: Click fuera sin fijar
 - **WHEN** el panel no está fijado y el usuario hace click en otra ventana

@@ -43,7 +43,7 @@ Monitor de servidores de Minecraft en la bandeja de Windows, pensado para jugado
 
 ## 4. `notifications`: enterarme sin abrir el panel
 
-- Toggle global, apagado por defecto.
+- Toggle global, apagado por defecto, en un diálogo de ajustes (engranaje en la cabecera) que también edita el intervalo de sondeo y cuántos servidores muestra la lista antes de hacer scroll.
 - Eventos:
   - "Alguien está jugando": el servidor pasa de 0 a 1 o más jugadores.
   - "X entró": **solo si `players_mode == full`**. La muestra parcial rota al azar y generaría falsos "entró".

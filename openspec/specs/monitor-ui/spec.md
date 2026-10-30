@@ -34,7 +34,7 @@ El panel SHALL mostrar una fila por servidor configurado con su nombre, su direc
 - **THEN** la fila se resalta y un click abre su detalle
 
 ### Requirement: Tamaño del panel
-El panel SHALL tener un ancho fijo y un alto que se adapta a su contenido entre un mínimo y un máximo. Cuando el contenido supera el alto máximo, la lista de servidores SHALL hacer scroll interno mientras la cabecera y el pie permanecen visibles. Al cambiar de alto, el panel SHALL mantener su borde inferior junto a la bandeja.
+El panel SHALL tener un ancho fijo y un alto que se adapta a su contenido entre un mínimo y un máximo. La lista SHALL mostrar como máximo tantas filas como indique el ajuste "Servidores visibles"; con más servidores, o cuando el contenido supera el alto máximo, la lista SHALL hacer scroll interno mientras la cabecera y el pie permanecen visibles. Al cambiar de alto, el panel SHALL mantener su borde inferior junto a la bandeja.
 
 #### Scenario: Pocos servidores
 - **WHEN** hay dos servidores configurados
@@ -43,6 +43,10 @@ El panel SHALL tener un ancho fijo y un alto que se adapta a su contenido entre 
 #### Scenario: Muchos servidores
 - **WHEN** la lista no cabe en el alto máximo
 - **THEN** la lista hace scroll y la cabecera y el pie siguen visibles
+
+#### Scenario: Servidores visibles
+- **WHEN** hay seis servidores y "Servidores visibles" vale 4
+- **THEN** la lista muestra cuatro filas completas y hace scroll para ver las otras dos
 
 ### Requirement: Estado vacío
 Cuando no hay servidores configurados, el panel SHALL mostrar un mensaje que indique que no hay servidores y que invite a agregar uno con el botón agregar. Si la configuración tiene un error de sintaxis, el mensaje SHALL indicar además la ruta de `config.toml` que hay que corregir.
@@ -56,7 +60,7 @@ Cuando no hay servidores configurados, el panel SHALL mostrar un mensaje que ind
 - **THEN** el estado vacío indica que el archivo tiene un error y muestra su ruta
 
 ### Requirement: Cabecera del panel
-La cabecera SHALL mostrar el nombre `MC Watch` y cuatro botones, en este orden: actualizar, agregar, fijar y cerrar. El botón agregar SHALL abrir el formulario para agregar un servidor. El botón fijar SHALL indicar visualmente si el panel está fijado. Mientras el formulario está abierto, el título SHALL ser "Agregar servidor", los botones actualizar y agregar SHALL ocultarse y SHALL mostrarse un botón volver que regresa a la lista. Mientras el detalle está abierto, el título SHALL ser el nombre del servidor y SHALL poder editarse, el botón agregar SHALL ocultarse, el botón actualizar SHALL seguir visible y actualizar solo ese servidor, SHALL mostrarse el botón volver y SHALL mostrarse un botón eliminar, siempre en rojo, antes de fijar y cerrar.
+La cabecera SHALL mostrar el nombre `MC Watch` y cinco botones, en este orden: actualizar, agregar, ajustes, fijar y cerrar. El botón agregar SHALL abrir el formulario para agregar un servidor. El botón ajustes SHALL abrir el diálogo de ajustes. El botón fijar SHALL indicar visualmente si el panel está fijado. Mientras el formulario está abierto, el título SHALL ser "Agregar servidor", los botones actualizar, agregar y ajustes SHALL ocultarse y SHALL mostrarse un botón volver que regresa a la lista. Mientras el detalle está abierto, el título SHALL ser el nombre del servidor y SHALL poder editarse, los botones agregar y ajustes SHALL ocultarse, el botón actualizar SHALL seguir visible y actualizar solo ese servidor, SHALL mostrarse el botón volver y SHALL mostrarse un botón eliminar, siempre en rojo, antes de fijar y cerrar.
 
 #### Scenario: Botón agregar
 - **WHEN** el usuario hace click en agregar
@@ -65,6 +69,10 @@ La cabecera SHALL mostrar el nombre `MC Watch` y cuatro botones, en este orden: 
 #### Scenario: Botón actualizar junto a agregar
 - **WHEN** el panel muestra la lista
 - **THEN** el botón actualizar aparece inmediatamente a la izquierda del botón agregar
+
+#### Scenario: Botón ajustes
+- **WHEN** el panel muestra la lista y el usuario hace click en el engranaje
+- **THEN** se abre el diálogo de ajustes
 
 #### Scenario: Indicador de fijado
 - **WHEN** el usuario activa fijar
@@ -76,7 +84,7 @@ La cabecera SHALL mostrar el nombre `MC Watch` y cuatro botones, en este orden: 
 
 #### Scenario: Cabecera del detalle
 - **WHEN** el detalle de "Survival" está abierto
-- **THEN** la cabecera muestra volver, "Survival", actualizar, eliminar en rojo, fijar y cerrar, y no muestra agregar
+- **THEN** la cabecera muestra volver, "Survival", actualizar, eliminar en rojo, fijar y cerrar, y no muestra agregar ni ajustes
 
 ### Requirement: Pie del panel
 El pie SHALL mostrar cuánto tiempo pasó desde que terminó el último ciclo de sondeo, en formato relativo ("Actualizado hace 12 s", "hace 2 min"), actualizándose al menos cada segundo mientras el panel está visible. El pie SHALL mostrar también la versión de la app. Antes de que termine el primer ciclo, SHALL mostrar "Actualizando…".
@@ -97,7 +105,7 @@ Cuando termina un ciclo de sondeo, el panel SHALL reflejar los nuevos estados y 
 - **THEN** la fila se actualiza sola al terminar el ciclo
 
 ### Requirement: Preview en navegador
-El proyecto SHALL ofrecer un modo preview que abre el panel en un navegador con datos de ejemplo que cubren los cuatro estados, las ediciones Bedrock y desconocida, y el estado vacío, sin iniciar la bandeja ni hacer consultas de red. En el preview, el formulario de agregar SHALL poder abrirse y SHALL simular la detección y sus resultados (éxito, host inexistente y edición desconocida) sin consultar la red ni escribir la configuración. Los datos de ejemplo SHALL incluir servidores con participantes en los modos full (con y sin jugadores), partial y hidden, un servidor dormido y un MOTD con colores. En el preview, renombrar y eliminar SHALL simularse sin escribir la configuración.
+El proyecto SHALL ofrecer un modo preview que abre el panel en un navegador con datos de ejemplo que cubren los cuatro estados, las ediciones Bedrock y desconocida, y el estado vacío, sin iniciar la bandeja ni hacer consultas de red. En el preview, el formulario de agregar SHALL poder abrirse y SHALL simular la detección y sus resultados (éxito, host inexistente y edición desconocida) sin consultar la red ni escribir la configuración. Los datos de ejemplo SHALL incluir servidores con participantes en los modos full (con y sin jugadores), partial y hidden, un servidor dormido y un MOTD con colores. En el preview, renombrar y eliminar SHALL simularse sin escribir la configuración. En el preview, el diálogo de ajustes SHALL abrirse y guardar SHALL aplicar los servidores visibles a la lista sin escribir la configuración.
 
 #### Scenario: Abrir el preview
 - **WHEN** el desarrollador ejecuta el comando de preview
@@ -110,6 +118,10 @@ El proyecto SHALL ofrecer un modo preview que abre el panel en un navegador con 
 #### Scenario: Detalle en el preview
 - **WHEN** el desarrollador abre en el preview el detalle de un servidor con muestra parcial
 - **THEN** el detalle muestra sus nombres y "N de M jugadores"
+
+#### Scenario: Ajustes en el preview
+- **WHEN** el desarrollador guarda "Servidores visibles" = 3 en el preview
+- **THEN** la lista muestra tres filas y hace scroll
 
 ### Requirement: Actualizar ahora
 El botón actualizar SHALL pedir un ciclo de sondeo inmediato de todos los servidores. Mientras el ciclo está en curso, el botón SHALL mostrarse ocupado y deshabilitado, y SHALL volver a su estado normal cuando la lista se actualiza con el resultado, o a los 15 segundos como máximo. Al terminar el ciclo, el pie SHALL mostrar "Actualizado hace 0 s".
