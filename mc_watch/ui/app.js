@@ -77,13 +77,24 @@
     return row;
   }
 
+  // Height the panel would have if nothing were clipped: its own padding and border, plus every
+  // child with its margins (flex items' margins do not collapse). The list counts in full.
+  function naturalHeight() {
+    const px = (value) => parseFloat(value) || 0;
+    const own = getComputedStyle(el.app);
+    let total = px(own.paddingTop) + px(own.paddingBottom)
+      + px(own.borderTopWidth) + px(own.borderBottomWidth);
+    for (const child of el.app.children) {
+      const style = getComputedStyle(child);
+      const height = child === el.list ? child.scrollHeight : child.offsetHeight;
+      total += height + px(style.marginTop) + px(style.marginBottom);
+    }
+    return Math.ceil(total);
+  }
+
   // The window height follows the content: Python clamps it to its min/max.
   function reportHeight() {
-    let natural = 2; // the panel border
-    for (const child of el.app.children) {
-      natural += child === el.list ? child.scrollHeight : child.offsetHeight;
-    }
-    natural = Math.ceil(natural);
+    const natural = naturalHeight();
     if (natural === state.lastHeight) return;
     state.lastHeight = natural;
     const api = bridge();
@@ -149,7 +160,9 @@
   el.close.addEventListener('click', hide);
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') hide();
+    if (event.key === 'Tab') document.body.classList.add('kbd');
   });
+  document.addEventListener('pointerdown', () => document.body.classList.remove('kbd'));
   window.addEventListener('blur', () => {
     const api = bridge();
     if (api) api.on_blur();
