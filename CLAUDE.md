@@ -7,6 +7,7 @@
 - **Para trabajo dirigido por especificación, usar OpenSpec, no las skills de superpowers.** Si una skill de superpowers (`brainstorming`, `writing-plans`, `subagent-driven-development`, `executing-plans`) pide otra ruta u otro formato, gana OpenSpec.
 - Los artefactos van en `openspec/changes/<nombre>/` — `proposal.md`, `design.md`, `tasks.md` y los deltas en `specs/` —, nunca en `docs/superpowers/`. El `tasks.md` sigue el formato de OpenSpec (`## N. Grupo` con ítems `- [ ] N.M`).
 - **Implementar directo.** No usar el ciclo de subagente por tarea más revisión de `subagent-driven-development` salvo que el usuario lo pida explícitamente: para cambios de este tamaño cuesta más de lo que aporta.
+- **Tests y lint solo al final del change.** No ejecutar el suite de tests ni el lint/typecheck (`uv run python -m unittest`, `uv run ruff check`, `uv run ruff format --check`, `uv run pyright`) tras cada tarea ni a mitad del change: se corren una sola vez al final, en la tarea de verificación final. Los tests sí se escriben junto con cada tarea; lo que se difiere es ejecutarlos. A mitad del change solo se ejecuta lo puntual que una tarea necesite para comprobar su comportamiento (un script, una prueba manual).
 - **Al aplicar un cambio de OpenSpec (`/opsx:apply`), crear siempre una rama nueva a partir de `main` actualizado.** No implementar sobre `main`.
 - Flujo (el mismo de `/nueva-rama`):
 
