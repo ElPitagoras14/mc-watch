@@ -112,6 +112,12 @@
       : `Actualizado hace ${formatAge(Date.now() / 1000 - state.updatedAt)}`;
   }
 
+  function editionLabel(edition) {
+    if (edition === 'java') return 'Java';
+    if (edition === 'bedrock') return 'Bedrock';
+    return 'edición desconocida';
+  }
+
   function buildRow(server) {
     const row = document.createElement('li');
     row.className = 'server';
@@ -130,12 +136,10 @@
     address.className = 'address';
     address.textContent = server.address;
     address.title = server.address;
-    if (server.edition === 'bedrock' || server.edition === 'unknown') {
-      const edition = document.createElement('span');
-      edition.className = `edition ${server.edition}`;
-      edition.textContent = server.edition === 'bedrock' ? ' · Bedrock' : ' · edición desconocida';
-      address.append(edition);
-    }
+    const edition = document.createElement('span');
+    edition.className = `edition ${server.edition}`;
+    edition.textContent = ` · ${editionLabel(server.edition)}`;
+    address.append(edition);
     info.append(name, address);
 
     const meta = document.createElement('div');
@@ -611,7 +615,7 @@
     const facts = [];
     if (online && server.version) facts.push(server.version);
     if (online && server.latency_ms !== null) facts.push(`${Math.round(server.latency_ms)} ms`);
-    if (server.edition === 'bedrock') facts.push('Bedrock');
+    facts.push(editionLabel(server.edition));
     el.dFacts.textContent = facts.join(' · ');
 
     renderStateMessage(server);
