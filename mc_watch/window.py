@@ -106,6 +106,9 @@ class _Api:
     def rename_server(self, address: str, name: str) -> Payload:
         return self._panel.rename_server(address, name)
 
+    def change_address(self, address: str, new_address: str) -> Payload:
+        return self._panel.change_address(address, new_address)
+
     def remove_server(self, address: str) -> Payload:
         return self._panel.remove_server(address)
 
@@ -120,6 +123,7 @@ class Panel:
         add_server: Callable[[str, str], Payload] | None = None,
         refresh: Callable[[], None] | None = None,
         rename_server: Callable[[str, str], Payload] | None = None,
+        change_address: Callable[[str, str], Payload] | None = None,
         remove_server: Callable[[str], Payload] | None = None,
         refresh_server: Callable[[str], None] | None = None,
         save_settings: Callable[[Payload], Payload] | None = None,
@@ -128,6 +132,7 @@ class Panel:
         self._add_server = add_server
         self._refresh = refresh
         self._rename_server = rename_server
+        self._change_address = change_address
         self._remove_server = remove_server
         self._refresh_server = refresh_server
         self._save_settings = save_settings
@@ -252,6 +257,12 @@ class Panel:
         if self._rename_server is None:
             return {"ok": False, "field": None, "message": "No se puede renombrar"}
         return self._rename_server(address, name)
+
+    def change_address(self, address: str, new_address: str) -> Payload:
+        """Called from the page; blocks until the new address is detected and saved."""
+        if self._change_address is None:
+            return {"ok": False, "field": None, "message": "No se puede cambiar la dirección"}
+        return self._change_address(address, new_address)
 
     def remove_server(self, address: str) -> Payload:
         """Called from the page; blocks until the server is deleted from the file."""

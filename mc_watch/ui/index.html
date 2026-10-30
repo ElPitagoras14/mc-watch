@@ -68,7 +68,16 @@
         <div class="srv-info">
           <div class="motd" id="d-motd"></div>
           <div class="facts" id="d-facts"></div>
-          <div class="address" id="d-address"></div>
+          <div class="address-row">
+            <span class="address" id="d-address" tabindex="0" role="button"
+                  aria-label="Cambiar la dirección"></span>
+            <button id="d-address-edit" class="pencil" type="button"
+                    title="Cambiar la dirección" aria-label="Cambiar la dirección">
+              <i class="ic" aria-hidden="true">&#xE70F;</i>
+            </button>
+            <input id="d-address-input" type="text" hidden spellcheck="false" autocomplete="off"
+                   aria-label="Dirección del servidor" placeholder="play.example.com[:puerto]">
+          </div>
         </div>
       </div>
       <p class="state-msg" id="d-state" hidden></p>

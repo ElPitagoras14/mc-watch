@@ -13,6 +13,7 @@ from mc_watch.config import (
     append_server,
     normalize_name,
     remove_server,
+    set_address,
     set_edition,
     set_name,
     validate_new_server,
@@ -116,6 +117,71 @@ class ServerManager:
             return _error(str(error), "name")
         self._poller.rename(address, normalized)
         return {"ok": True, "name": normalized}
+
+    def change_address(self, address: str, new_address: str) -> Reply:
+        """Move the server to another address: validate, detect the edition there, save and
+        start its status over. Blocks for up to a few seconds; the page awaits it. Never raises."""
+        try:
+            with self._lock:
+                return self._change_address(address, new_address)
+        except Exception:
+            log.exception("Error inesperado al cambiar la dirección de %r", address)
+            return _error("No se pudo cambiar la dirección del servidor", "address")
+
+    def _change_address(self, address: str, new_address: str) -> Reply:
+        statuses = self._poller.snapshot().servers
+        key = address.casefold()
+        current = next((s.server for s in statuses if s.server.address.casefold() == key), None)
+        if current is None:
+            return _error("El servidor ya no está en la lista", "address")
+        new_address = new_address.strip()
+        if new_address == current.address:
+            return {"ok": True, "address": current.address, "name": current.name}
+
+        others = [s.server.address for s in statuses if s.server is not current]
+        server = validate_new_server("", new_address, others)
+        if isinstance(server, ValidationError):
+            return _error(server.message, server.field)
+        if not self._config.writable:
+            return _error(self._config.error or "No se puede escribir la configuración", "address")
+
+        candidate = server
+
+        async def detect() -> ProbeResult:
+            return await self._probe_fn(candidate)
+
+        future = self._poller.submit(detect())
+        try:
+            result = future.result(timeout=DETECT_TIMEOUT_SECS)
+        except TimeoutError:
+            future.cancel()
+            return _error("La detección tardó demasiado", "address")
+        if isinstance(result, ProbeUnresolvable):
+            return _error("No se encontró el host", "address")
+
+        edition = result.edition if isinstance(result, ProbeOk) else Edition.UNKNOWN
+        # A server named after its address would keep showing one that is gone.
+        name = new_address if current.name == current.address else current.name
+        try:
+            set_address(
+                self._directory,
+                current.address,
+                new_address,
+                edition,
+                name if name != current.name else None,
+            )
+        except ConfigWriteError as error:
+            log.warning("No se pudo cambiar la dirección de %s: %s", current.address, error)
+            return _error(str(error), "address")
+
+        # Before `poller.change_address`, whose snapshot reaches `on_snapshot` on another thread.
+        self._editions.pop(current.address.casefold(), None)
+        self._editions[new_address.casefold()] = edition
+        self._poller.change_address(
+            current.address, replace(server, name=name, edition=edition), result
+        )
+        log.info("%s: dirección cambiada a %s, %s", current.address, new_address, edition.value)
+        return {"ok": True, "address": new_address, "name": name}
 
     def remove_server(self, address: str) -> Reply:
         """Delete the server from the file and stop tracking it. Never raises."""

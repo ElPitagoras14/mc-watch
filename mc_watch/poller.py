@@ -127,6 +127,23 @@ class Poller:
 
         self._on_loop(apply)
 
+    def change_address(self, address: str, server: ServerConfig, result: ProbeResult) -> None:
+        """Replace the server with that address by `server`, in the same place and with a status
+        that starts over from a probe `result` already obtained, and publish a snapshot right
+        away. A probe of the old address that is still in flight is discarded. Safe to call from
+        any thread."""
+
+        def apply() -> None:
+            index = self._index_of(address)
+            if index is None:
+                return
+            status = next_status(initial_status(server), result)
+            self._statuses[index] = status
+            log.info("%s: ahora en %s, %s", address, server.address, status.state.value)
+            self._publish_membership()
+
+        self._on_loop(apply)
+
     def remove(self, address: str) -> None:
         """Stop tracking the server with that address (the first one, ignoring case) and publish
         a snapshot right away. A probe of it that is still in flight is discarded. Safe to call

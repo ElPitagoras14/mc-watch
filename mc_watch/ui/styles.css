@@ -573,6 +573,88 @@ body.kbd .hd h1.editable:focus-visible {
   white-space: nowrap;
 }
 
+/* The address is edited in place like the title: a click or the pencil swaps it for an input. */
+.address-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  margin-top: 2px;
+}
+
+.address-row [hidden] {
+  display: none;
+}
+
+.address-row .address {
+  min-width: 0;
+  margin: 0 0 0 -4px;
+  padding: 3px 4px;
+  font-size: 12.5px;
+  border-radius: 4px;
+  cursor: text;
+}
+
+.address-row .address:hover {
+  background: var(--hover);
+}
+
+.address-row .address:focus {
+  outline: none;
+}
+
+body.kbd .address-row .address:focus-visible,
+body.kbd .address-row .pencil:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+.address-row .pencil {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.address-row .pencil .ic {
+  font-size: 13px;
+}
+
+.address-row .pencil:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.address-row .pencil:focus {
+  outline: none;
+}
+
+.address-row input {
+  flex: 1;
+  min-width: 0;
+  margin: 2px 0 0 -6px;
+  padding: 5px 8px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  background: var(--hover);
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  outline: none;
+  user-select: text;
+}
+
+.address-row input:disabled {
+  opacity: 0.6;
+}
+
 .state-msg {
   display: flex;
   align-items: center;

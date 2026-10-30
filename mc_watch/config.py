@@ -340,6 +340,37 @@ def set_name(directory: Path | None, address: str, name: str) -> bool:
     return _update(directory, edit)
 
 
+def set_address(
+    directory: Path | None, old: str, new: str, edition: Edition, name: str | None = None
+) -> bool:
+    """Move the entry with address `old` to `new`, with the edition detected there and, when
+    given, a new name. Returns whether the file was written. Raises `ConfigWriteError` when the
+    entry is gone."""
+
+    def edit(document: tomlkit.TOMLDocument) -> bool:
+        found = _find_entry(document, old)
+        if found is None:
+            raise ConfigWriteError("El servidor ya no está en la configuración")
+        entry = found[1]
+        current = cast("dict[str, Any]", entry)
+        changed = False
+        for key, value in (("address", new), ("edition", edition.value), ("name", name)):
+            if value is None or current.get(key) == value:
+                continue
+            if key in current:
+                entry[key] = value
+            else:
+                # Appending would land after the comments written above the next entry, which
+                # tomlkit keeps at the end of this one. It has no public insert at a position.
+                container = cast("Any", entry.value)
+                last = max(i for i, (k, _) in enumerate(container.body) if k is not None)
+                container._insert_at(last + 1, key, value)  # pyright: ignore[reportPrivateUsage]
+            changed = True
+        return changed
+
+    return _update(directory, edit)
+
+
 def remove_server(directory: Path | None, address: str) -> bool:
     """Delete the entry with that address, with the comments written right above it. Returns
     whether the file was written: it is not when the entry is already gone."""

@@ -12,8 +12,10 @@ from mc_watch.config import (
     load_config,
     normalize_name,
     remove_server,
+    set_address,
     set_name,
 )
+from mc_watch.models import Edition
 
 THREE = """# mi config
 poll_interval_secs = 30
@@ -91,6 +93,29 @@ class SetNameTest(EditTestCase):
         self.write(THREE)
         with self.assertRaises(ConfigWriteError):
             set_name(self.directory, "z.example.com", "Zeta")
+        self.assertEqual(self.read(), THREE)
+
+    def test_set_address_changes_only_that_entry(self) -> None:
+        self.write(THREE)
+        self.assertTrue(
+            set_address(
+                self.directory,
+                "B.example.com",
+                "x.example.com:25566",
+                Edition.BEDROCK,
+                name="x.example.com:25566",
+            )
+        )
+        expected = THREE.replace(
+            'name = "B"\naddress = "b.example.com"',
+            'name = "x.example.com:25566"\naddress = "x.example.com:25566"\nedition = "bedrock"',
+        )
+        self.assertEqual(self.read(), expected)
+
+    def test_set_address_without_entry_raises_and_does_not_write(self) -> None:
+        self.write(THREE)
+        with self.assertRaises(ConfigWriteError):
+            set_address(self.directory, "z.example.com", "x.example.com", Edition.JAVA)
         self.assertEqual(self.read(), THREE)
 
     def test_the_middle_entry_goes_and_the_others_keep_their_comments(self) -> None:
