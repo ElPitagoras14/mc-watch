@@ -7,7 +7,7 @@ Definir el panel principal de `mc-watch`: la lista de servidores con su estado y
 ## Requirements
 
 ### Requirement: Lista de servidores
-El panel SHALL mostrar una fila por servidor configurado con su nombre, su dirección tal como está en la configuración, su estado (Consultando, Online, Offline o Error) con un indicador de color, y sus jugadores en formato `X/Y`. Cuando el servidor no está online, la columna de jugadores SHALL mostrar `—`. Junto a la dirección, la fila de un servidor Bedrock SHALL indicar "Bedrock" y la de un servidor de edición desconocida SHALL mostrar el aviso "edición desconocida". La fila de un servidor Java SHALL NOT llevar indicación de edición.
+El panel SHALL mostrar una fila por servidor configurado con su nombre, su dirección tal como está en la configuración, su estado (Consultando, Online, Offline o Error) con un indicador de color, y sus jugadores en formato `X/Y`. Cuando el servidor no está online, la columna de jugadores SHALL mostrar `—`. Junto a la dirección, la fila de un servidor Bedrock SHALL indicar "Bedrock" y la de un servidor de edición desconocida SHALL mostrar el aviso "edición desconocida". La fila de un servidor Java SHALL NOT llevar indicación de edición. Cada fila SHALL ser interactiva: SHALL mostrar un estado al pasar el puntero y al recibir el foco del teclado, y SHALL abrir el detalle del servidor.
 
 #### Scenario: Servidor online
 - **WHEN** el servidor "Survival" en `play.example.com` está online con 3 de 20 jugadores
@@ -28,6 +28,10 @@ El panel SHALL mostrar una fila por servidor configurado con su nombre, su direc
 #### Scenario: Edición desconocida
 - **WHEN** un servidor es de edición desconocida
 - **THEN** su fila muestra el aviso "edición desconocida" junto a la dirección, y el aviso desaparece cuando la edición se detecta
+
+#### Scenario: Fila interactiva
+- **WHEN** el usuario pasa el puntero sobre una fila
+- **THEN** la fila se resalta y un click abre su detalle
 
 ### Requirement: Tamaño del panel
 El panel SHALL tener un ancho fijo y un alto que se adapta a su contenido entre un mínimo y un máximo. Cuando el contenido supera el alto máximo, la lista de servidores SHALL hacer scroll interno mientras la cabecera y el pie permanecen visibles. Al cambiar de alto, el panel SHALL mantener su borde inferior junto a la bandeja.
@@ -52,7 +56,7 @@ Cuando no hay servidores configurados, el panel SHALL mostrar un mensaje que ind
 - **THEN** el estado vacío indica que el archivo tiene un error y muestra su ruta
 
 ### Requirement: Cabecera del panel
-La cabecera SHALL mostrar el nombre `MC Watch` y cuatro botones, en este orden: actualizar, agregar, fijar y cerrar. El botón agregar SHALL abrir el formulario para agregar un servidor. El botón fijar SHALL indicar visualmente si el panel está fijado. Mientras el formulario está abierto, el título SHALL ser "Agregar servidor", los botones actualizar y agregar SHALL ocultarse y SHALL mostrarse un botón volver que regresa a la lista.
+La cabecera SHALL mostrar el nombre `MC Watch` y cuatro botones, en este orden: actualizar, agregar, fijar y cerrar. El botón agregar SHALL abrir el formulario para agregar un servidor. El botón fijar SHALL indicar visualmente si el panel está fijado. Mientras el formulario está abierto, el título SHALL ser "Agregar servidor", los botones actualizar y agregar SHALL ocultarse y SHALL mostrarse un botón volver que regresa a la lista. Mientras el detalle está abierto, el título SHALL ser el nombre del servidor y SHALL poder editarse, el botón agregar SHALL ocultarse, el botón actualizar SHALL seguir visible y actualizar solo ese servidor, SHALL mostrarse el botón volver y SHALL mostrarse un botón eliminar, siempre en rojo, antes de fijar y cerrar.
 
 #### Scenario: Botón agregar
 - **WHEN** el usuario hace click en agregar
@@ -69,6 +73,10 @@ La cabecera SHALL mostrar el nombre `MC Watch` y cuatro botones, en este orden: 
 #### Scenario: Volver
 - **WHEN** el formulario está abierto y el usuario hace click en volver
 - **THEN** el panel muestra la lista sin agregar nada
+
+#### Scenario: Cabecera del detalle
+- **WHEN** el detalle de "Survival" está abierto
+- **THEN** la cabecera muestra volver, "Survival", actualizar, eliminar en rojo, fijar y cerrar, y no muestra agregar
 
 ### Requirement: Pie del panel
 El pie SHALL mostrar cuánto tiempo pasó desde que terminó el último ciclo de sondeo, en formato relativo ("Actualizado hace 12 s", "hace 2 min"), actualizándose al menos cada segundo mientras el panel está visible. El pie SHALL mostrar también la versión de la app. Antes de que termine el primer ciclo, SHALL mostrar "Actualizando…".
@@ -89,7 +97,7 @@ Cuando termina un ciclo de sondeo, el panel SHALL reflejar los nuevos estados y 
 - **THEN** la fila se actualiza sola al terminar el ciclo
 
 ### Requirement: Preview en navegador
-El proyecto SHALL ofrecer un modo preview que abre el panel en un navegador con datos de ejemplo que cubren los cuatro estados, las ediciones Bedrock y desconocida, y el estado vacío, sin iniciar la bandeja ni hacer consultas de red. En el preview, el formulario de agregar SHALL poder abrirse y SHALL simular la detección y sus resultados (éxito, host inexistente y edición desconocida) sin consultar la red ni escribir la configuración.
+El proyecto SHALL ofrecer un modo preview que abre el panel en un navegador con datos de ejemplo que cubren los cuatro estados, las ediciones Bedrock y desconocida, y el estado vacío, sin iniciar la bandeja ni hacer consultas de red. En el preview, el formulario de agregar SHALL poder abrirse y SHALL simular la detección y sus resultados (éxito, host inexistente y edición desconocida) sin consultar la red ni escribir la configuración. Los datos de ejemplo SHALL incluir servidores con participantes en los modos full (con y sin jugadores), partial y hidden, un servidor dormido y un MOTD con colores. En el preview, renombrar y eliminar SHALL simularse sin escribir la configuración.
 
 #### Scenario: Abrir el preview
 - **WHEN** el desarrollador ejecuta el comando de preview
@@ -98,6 +106,10 @@ El proyecto SHALL ofrecer un modo preview que abre el panel en un navegador con 
 #### Scenario: Formulario en el preview
 - **WHEN** el desarrollador abre el formulario en el preview y agrega `no-existe.invalid`
 - **THEN** el formulario muestra "Detectando…" y luego el error "No se encontró el host"
+
+#### Scenario: Detalle en el preview
+- **WHEN** el desarrollador abre en el preview el detalle de un servidor con muestra parcial
+- **THEN** el detalle muestra sus nombres y "N de M jugadores"
 
 ### Requirement: Actualizar ahora
 El botón actualizar SHALL pedir un ciclo de sondeo inmediato de todos los servidores. Mientras el ciclo está en curso, el botón SHALL mostrarse ocupado y deshabilitado, y SHALL volver a su estado normal cuando la lista se actualiza con el resultado, o a los 15 segundos como máximo. Al terminar el ciclo, el pie SHALL mostrar "Actualizado hace 0 s".
