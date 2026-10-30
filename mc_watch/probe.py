@@ -40,6 +40,9 @@ PROBE_TIMEOUT_SECS = 3.0
 # proxies use -1 to show unrelated text.
 ASLEEP_PROTOCOL = -1
 ASLEEP_KEYWORDS = ("offline", "sleeping")
+# lazymc answers the ping itself while the real server is off, starting or stopping, with one of
+# its default MOTDs and an otherwise normal version and protocol.
+LAZYMC_MOTDS = ("server is sleeping", "server is starting", "server going to sleep")
 
 ICON_PREFIX = "data:image/png;base64,"
 _CODES_RE = re.compile(r"§.")
@@ -141,9 +144,11 @@ def _strip_codes(text: str) -> str:
     return _CODES_RE.sub("", text)
 
 
-def _is_asleep(protocol: int, version_name: str) -> bool:
+def _is_asleep(protocol: int, version_name: str, motd: Motd) -> bool:
     plain = _strip_codes(version_name).casefold()
-    return protocol == ASLEEP_PROTOCOL and any(word in plain for word in ASLEEP_KEYWORDS)
+    if protocol == ASLEEP_PROTOCOL and any(word in plain for word in ASLEEP_KEYWORDS):
+        return True
+    return any(text in motd.to_plain().casefold() for text in LAZYMC_MOTDS)
 
 
 def _motd_segments(motd: Motd) -> tuple[MotdSegment, ...]:
@@ -210,7 +215,7 @@ async def _java(server: ServerConfig, query: bool) -> ProbeOk | ProbeAsleep:
     ]
     try:
         status = await status_task
-        if _is_asleep(status.version.protocol, status.version.name):
+        if _is_asleep(status.version.protocol, status.version.name, status.motd):
             return ProbeAsleep()
         outcome, names = QueryOutcome.SKIPPED, ()
         if query_task is not None:
