@@ -69,7 +69,7 @@ Si el archivo no existe, el sistema SHALL iniciar sin servidores. Si el archivo 
 ### Requirement: Escritura de la configuración
 Al escribir `config.toml`, el sistema SHALL conservar los comentarios, el orden y el formato de lo que ya había en el archivo, y SHALL cambiar solo lo necesario:
 - agregar la entrada nueva al final;
-- actualizar el `edition` o el `name` de una entrada existente;
+- actualizar el `edition`, el `name` o el `address` de una entrada existente;
 - quitar una entrada completa;
 - actualizar o agregar las claves `notifications`, `poll_interval_secs` y `max_visible_servers`, en la parte superior del archivo, antes de las entradas `[[servers]]`.
 
@@ -86,6 +86,10 @@ Las entradas existentes SHALL identificarse por su `address`, sin distinguir may
 #### Scenario: Renombrar conserva el resto
 - **WHEN** el usuario renombra el segundo de tres servidores
 - **THEN** solo cambia el `name` de esa entrada y el resto del archivo, incluidos los comentarios, queda igual
+
+#### Scenario: Cambiar la dirección conserva el resto
+- **WHEN** el usuario cambia la dirección del segundo de tres servidores
+- **THEN** solo cambian el `address` y el `edition` de esa entrada (y el `name`, si era igual a la dirección anterior), y el resto del archivo, incluidos los comentarios y el orden, queda igual
 
 #### Scenario: Quitar una entrada
 - **WHEN** el usuario elimina el segundo de tres servidores
